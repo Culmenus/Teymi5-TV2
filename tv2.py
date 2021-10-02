@@ -224,15 +224,14 @@ for s in range(5):
 
 
 '''
-# Pælingar með PI fylkið, seinvirkt ca. 5min
+# Pælingar með PI fylkið, tekur tæpar tvær mínútur
 # Greedy stefna, alltaf tekið hæsta gildið
 from scipy import sparse
 import tqdm
 N = 2**32-1 
-PI = sparse.csr_matrix((2, N), dtype=int)
+PI = sparse.csr_matrix((1, N), dtype=int)
 for key, value in tqdm.tqdm(V.items()):
     PI[0, key] = -value # Mínus hér? Því Tómas tekur argmax
-    PI[1, key] = -value 
 
 sparse.save_npz("Teymi5.npz", PI)
 '''
