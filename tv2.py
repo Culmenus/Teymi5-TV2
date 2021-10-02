@@ -221,3 +221,18 @@ for s in range(5):
         elif c == 2:
             l += 1
     print("Both greedy:\nPlayer 1 win: {}\nPlayer 2 win: {}".format(w, l))
+
+
+'''
+# Pælingar með PI fylkið, seinvirkt ca. 5min
+# Greedy stefna, alltaf tekið hæsta gildið
+from scipy import sparse
+import tqdm
+N = 2**32-1 
+PI = sparse.csr_matrix((2, N), dtype=int)
+for key, value in tqdm.tqdm(V.items()):
+    PI[0, key] = -value # Mínus hér? Því Tómas tekur argmax
+    PI[1, key] = -value 
+
+sparse.save_npz("Teymi5.npz", PI)
+'''
