@@ -100,27 +100,30 @@ def computeHash(board, n = 5, m = 5):
   return h
 """
 np.random.seed(42)
-zobTable = np.random.randint(1, 2**(5*5) - 1, size=(5, 5, 3), dtype=np.uint32)
+zobTable = np.random.randint(1, 2**(64) - 1, size=(5, 5, 3), dtype=np.uint64)
+np.random.seed(42)
+reduced_zob_table = np.random.randint(1, 2**(5*5) - 1, size=(5, 5, 3), dtype=np.uint32)
 # compute index from current board state
-def computeHash(board, n=5, m=5):
+def computeHash(board, n=5, m=5, hash_table=zobTable):
     h = np.uint32(0)
     for i in range(n):
         for j in range(board[i, -1]):
-            h ^= zobTable[i, j, board[i, j]]
+            h ^= hash_table[i, j, board[i, j]]
     return h
 
 
 # ---
 
 maxHashValue = 2**(5*5)
-V = np.zeros(maxHashValue, dtype=np.int16)
+V_final = np.zeros(maxHashValue, dtype=np.int16)
+V = {}
 maxgame = 5 * 5 + 1
 
 # ---
 
 
-def nextHash(old_hash, i, j, p):
-    return old_hash ^ zobTable[i, j, p]
+def nextHash(old_hash, i, j, p, hash_table=zobTable):
+    return old_hash ^ hash_table[i, j, p]
 
 
 def getVal(h):
@@ -133,7 +136,7 @@ def getVal(h):
 # np.save("teymiX", PI)
 # !ls
 
-upd = [0]
+upd = [0]  # Unique Positions Discovered ?
 
 
 def learn(greedy1=False, greedy2=False, pr=False):
@@ -150,7 +153,7 @@ def learn(greedy1=False, greedy2=False, pr=False):
     while True:
         a = np.where(S[:, -2] == 0)[0]
         if 0 == len(a):  # check if a legal move was possible, else bail out
-            V[h] = 1
+            V[h] = 1  # Draw?
             if pr:
                 print("draw, moves = {}".format(ct))
             return 0  # its a draw, return 0 and board
@@ -223,3 +226,17 @@ if __name__ == "__main__":
             elif c == 2:
                 l += 1
         print("Both greedy:\nPlayer 1 win: {}\nPlayer 2 win: {}".format(w, l))
+
+
+'''
+# Pælingar með PI fylkið, tekur tæpar tvær mínútur
+# Greedy stefna, alltaf tekið hæsta gildið
+from scipy import sparse
+import tqdm
+N = 2**32-1 
+PI = sparse.csr_matrix((1, N), dtype=int)
+for key, value in tqdm.tqdm(V.items()):
+    PI[0, key] = -value # Mínus hér? Því Tómas tekur argmax
+
+sparse.save_npz("Teymi5.npz", PI)
+'''
