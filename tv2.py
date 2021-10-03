@@ -24,20 +24,20 @@ def terminal(board, p, i, j, n=5, m=5):
     # Horizontal
     t = -min(2, i)
     count = 0
-    while t <= min(2, n - 1 - i) and count < 3:
+    while t <= min(2, n - 1 - i):
         if board[i + t, j] == p:
             count += 1
         else:
             count = 0
         t += 1
-    if count == 3:
-        return True
+        if count == 3:
+            return True
 
     # Vertical
     # only checks below last placed marker
     t = -min(2, j)
-    count = 0
-    while t <= 0:
+    count = 1
+    while t < 0:
         if board[i, j + t] == p:
             count += 1
         else:
@@ -49,26 +49,28 @@ def terminal(board, p, i, j, n=5, m=5):
     # Main diagonal
     t = -min(2, min(i, j))
     count = 0
-    while t <= min(2, min(n - 1 - i, m - 1 - j)) and count < 3:
+    temp = min(2, min(n - i, m - j) - 1)
+    while t <= temp:
         if board[i + t, j + t] == p:
             count += 1
         else:
             count = 0
         t += 1
-    if count == 3:
-        return True
+        if count == 3:
+            return True
 
     # Antidiagonal
     t = -min(2, min(i, m - 1 - j))
     count = 0
-    while t <= min(2, min(n - 1 - i, j)) and count < 3:
+    temp = min(2, min(n - 1 - i, j))
+    while t <= temp:
         if board[i + t, j - t] == p:
             count += 1
         else:
             count = 0
         t += 1
-    if count == 3:
-        return True
+        if count == 3:
+            return True
     return False
 
 
@@ -98,10 +100,10 @@ def computeHash(board, n = 5, m = 5):
   return h
 """
 np.random.seed(42)
-zobTable = np.random.randint(1, 2 ** 64 - 1, size=(5, 5, 3), dtype=np.uint64)
+zobTable = np.random.randint(1, 2**(5*5) - 1, size=(5, 5, 3), dtype=np.uint32)
 # compute index from current board state
 def computeHash(board, n=5, m=5):
-    h = np.uint64(0)
+    h = np.uint32(0)
     for i in range(n):
         for j in range(board[i, -1]):
             h ^= zobTable[i, j, board[i, j]]
@@ -110,9 +112,8 @@ def computeHash(board, n=5, m=5):
 
 # ---
 
-maxHashValue = 2 ** (5 * 5) - 2
-# V = np.zeros(maxHashValue, dtype=np.int16)
-V = {}
+maxHashValue = 2**(5*5)
+V = np.zeros(maxHashValue, dtype=np.int16)
 maxgame = 5 * 5 + 1
 
 # ---
@@ -186,38 +187,39 @@ def learn(greedy1=False, greedy2=False, pr=False):
         p = getotherplayer(p)  # other player's turn
 
 
-for s in range(5):
-    for i in range(10):
-        upd[0] = 0
+if __name__ == "__main__":
+    for s in range(5):
+        for i in range(10):
+            upd[0] = 0
+            for j in range(10000):
+                learn()
+            print("{}: {}".format(i, upd[0]))
+            for j in range(3):
+                learn(greedy1=True, greedy2=True, pr=True)
+        w = 0
+        l = 0
         for j in range(10000):
-            learn()
-        print("{}: {}".format(i, upd[0]))
-        for j in range(3):
-            learn(greedy1=True, greedy2=True, pr=True)
-    w = 0
-    l = 0
-    for j in range(10000):
-        c = learn(greedy1=True)
-        if c == 1:
-            w += 1
-        elif c == 2:
-            l += 1
-    print("Player 1 greedy:\nWins: {}\nLosses: {}\n".format(w, l))
-    w = 0
-    l = 0
-    for j in range(10000):
-        c = learn(greedy2=True)
-        if c == 1:
-            w += 1
-        elif c == 2:
-            l += 1
-    print("Player 2 greedy:\nWins: {}\nLosses: {}\n".format(l, w))
-    w = 0
-    l = 0
-    for j in range(10000):
-        c = learn(greedy1=True, greedy2=True)
-        if c == 1:
-            w += 1
-        elif c == 2:
-            l += 1
-    print("Both greedy:\nPlayer 1 win: {}\nPlayer 2 win: {}".format(w, l))
+            c = learn(greedy1=True)
+            if c == 1:
+                w += 1
+            elif c == 2:
+                l += 1
+        print("Player 1 greedy:\nWins: {}\nLosses: {}\n".format(w, l))
+        w = 0
+        l = 0
+        for j in range(10000):
+            c = learn(greedy2=True)
+            if c == 1:
+                w += 1
+            elif c == 2:
+                l += 1
+        print("Player 2 greedy:\nWins: {}\nLosses: {}\n".format(l, w))
+        w = 0
+        l = 0
+        for j in range(10000):
+            c = learn(greedy1=True, greedy2=True)
+            if c == 1:
+                w += 1
+            elif c == 2:
+                l += 1
+        print("Both greedy:\nPlayer 1 win: {}\nPlayer 2 win: {}".format(w, l))
