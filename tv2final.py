@@ -102,9 +102,6 @@ maxgame = 5*5 + 1
 def nextHash(old_hash, i, j, p):
     return old_hash ^ zobTable[i,j,p]
 
-# Save your policy, PI to file, see folder icon on left hand side to download!
-# np.save("teymiX", PI)
-# !ls
 upd = [0]
 def learn(greedy1 = False, greedy2 = False, pr = False):
     S = iState() # initial board state
@@ -155,12 +152,12 @@ def learn(greedy1 = False, greedy2 = False, pr = False):
         h = h1 # Update the hash value
         p = getotherplayer(p) # other player's turn
 
-for s in range(2):
-    for i in range(10):
+for s in range(50):
+    for i in range(20):
         upd[0] = 0
-        for j in range(10000):
+        for j in range(20000):
             learn()
-        print("{}: {}".format(i, upd[0]))
+        print("{}: {}".format(20*s + i, upd[0]))
         for j in range(3):
             learn(greedy1=True, greedy2=True, pr=True)
     w = 0
