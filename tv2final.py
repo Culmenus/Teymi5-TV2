@@ -8,16 +8,13 @@ getotherplayer = lambda p : 3-p # returns the other player
 def iState(n = 5, m = 5):
     return np.zeros((n,m+1), dtype=np.uint16)
 
-def undoAction(board, move):
-    board[move,board[move,-1]-1] = 0 # clear the disc from the board
-    board[move,-1] -= 1 # next legal drop
-
 # perform move for player on board
 def Action(board, move, player):
     board[move,board[move,-1]] = player # place the disc on board
     board[move,-1] += 1 # next legal drop
 
 # determine if terminal board state, assuming last move was made by player p
+# We only need to check if the last piece added wins the game, no need to scan the whole board
 def terminal(board, p, i, j, n = 5, m = 5):
     # Horizontal
     t = -min(2, i)
@@ -99,10 +96,13 @@ maxgame = 5*5 + 1
 
 #---
 
+# Get the next hash resulting from an action on tile i,j
 def nextHash(old_hash, i, j, p):
     return old_hash ^ zobTable[i,j,p]
 
-upd = [0]
+upd = [0] # check to see how much the values are updated
+
+# Training our player with TD(0)
 def learn(greedy1 = False, greedy2 = False, pr = False):
     S = iState() # initial board state
     p = 1 # first player to move (other player is 2)
@@ -112,21 +112,21 @@ def learn(greedy1 = False, greedy2 = False, pr = False):
     Action(S, int(a), p) # force first move to be random
     p = getotherplayer(p) # other player's turn
     h = computeHash(S)
-    b = pr
+    b = pr # In order to print first action
     ct = 1
     while True:
-        a = np.where(S[:,-2] == 0)[0]
+        a = np.where(S[:,-2] == 0)[0] # All legal moves
         if 0 == len(a): # check if a legal move was possible, else bail out
-            PI[h] = -1
+            PI[h] = -1 # An endstate is bad when looking ahead
             if pr:
                 print("draw, moves = {}".format(ct))
             return 0 # it's a draw, return 0 and board
-        vals = [PI[nextHash(h, i, S[i,-1], p)] for i in a]
-        v = PI[h]
+        vals = [PI[nextHash(h, i, S[i,-1], p)] for i in a] # Values for all possible moves
+        v = PI[h] # value of current state
         maxv = max(vals)
-        if (v != -maxv):
+        if (v != -maxv): # Check for update
             upd[0] += 1
-        PI[h] = -maxv
+        PI[h] = -maxv #
         if (p == 1 and not greedy1) or (p == 2 and not greedy2):
             # random policy
             a = np.random.choice(a, 1)[0]
@@ -138,8 +138,9 @@ def learn(greedy1 = False, greedy2 = False, pr = False):
         Action(S, a, p) # take action a and update the board state
         h1 = nextHash(h, a, S[a,-1] - 1, p)
         if terminal(S, p, a, S[a,-1] - 1):
-            PI[h] = -maxgame + ct
-            PI[h1] = maxgame - ct
+            endval = maxgame - ct # In order to make a losing side end slowly and a winning side to finish fast
+            PI[h] = -endval # The opponent can win in the next game
+            PI[h1] = endval # You have won
             if pr:
                 print("w = {}, moves = {}".format(p, ct))
                 #pretty_print(S)
@@ -152,6 +153,7 @@ def learn(greedy1 = False, greedy2 = False, pr = False):
         h = h1 # Update the hash value
         p = getotherplayer(p) # other player's turn
 
+# Simulation
 for s in range(50):
     for i in range(20):
         upd[0] = 0
@@ -188,5 +190,5 @@ for s in range(50):
             l += 1
     print("Both greedy:\nPlayer 1 win: {}\nPlayer 2 win: {}".format(w, l))
 
-
+# Save player
 sparse.save_npz("Teymi5.npz", sparse.csr_matrix(PI))
