@@ -1,0 +1,11 @@
+1.	In chapter 9.5 Sutton and Barto describe feature construction for linear models. Describe how you would apply one of their techniques to construct features for our game connect-3? How do the features you constructed make sense for the game?
+    > We would maybe construct features with a convolution of different masks. Each mask could represent a different state in e.g. a 3 by 3 subboard. One such mask/feature could maybe be having 2 of our pieces on top each other and an empty space above (this feature would then be 100% correlated with a winning state if its our turn).
+    > There are many ways to construct additional features. One feature could be the number of chips already in play. Maybe it could be beneficial to have a feature for the player (or we could try to invert the board instead). We might consider counting all the occurrances of 2-in-a-row's we have. We could count the number of 2-chip placements with the possibility of completing a 3-in-a-row.
+    > We could continue this for as many features as we could think of. The hard part is sifting through them to determine which features, however intuitive or counter-intuitive they may seem, would actually be beneficial to our model.
+
+2.	Now using your teams value function, from the previous team application exercise, apply batch learning discussed in Silver's lecture to approximate the value function using the linear features above. I[f] your team used Q learning you will need to create one linear function for each action (or you can use the Q values to generate after-state value function).
+
+    > We suppose that here we could just simply calculate all the features for all our boards, we don't necessarily need to limit the batch size (unless we run into memory limitations). Then it's just a matter of solving the least squares problem by linear algebra.
+    
+3.	Bonus: how does the approximate function perform against the hash table value function? 
+    > 
