@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 class SequenceEnv:
 
@@ -48,6 +49,9 @@ class SequenceEnv:
                    [0, 0, 0, 1, 1, 1, 1, 1, 0, 0],
                    [0, 0, 0, 0, 1, 1, 1, 1, 1, 0],
                    [0, 0, 0, 0, 0, 1, 1, 1, 1, 1]]
+        extraWin = [[0,1,1,1,1,1,1,1,1,1],
+                    [1,1,1,1,1,1,1,1,1,0],
+                    [1,1,1,1,1,1,1,1,1,1]]
         temp_board = self.discs_on_board.copy()
         temp_board[temp_board == -1] = self.player
         test = temp_board == self.player
@@ -83,25 +87,37 @@ class SequenceEnv:
             temp.append(i)
         if (len(temp) == 0):
             return False
-        for i in tempWin:
-            for j in temp:
-                if (sum(np.multiply(i, j)) >= 5):
-                    return True
+        player_sum = 0
+        for i in temp:
+            temp_sum = 0
+            for j in tempWin:
+                temp_sum = sum(np.multiply(i, j))
+                if temp_sum >= 5:
+                    if self.num_players == 2:
+                        player_sum = player_sum + temp_sum
+                        extra_sum0 = sum(np.multiply(extraWin[0], i));
+                        extra_sum1 = sum(np.multiply(extraWin[1], i));
+                        extra_sum2 = sum(np.multiply(extraWin[2], i));
+                        if player_sum >= 10 or extra_sum0 >= 9 or extra_sum1 >= 9 or extra_sum2 >= 10:
+                            return True
+                        break
+                    else:
+                        return True          
         return False
 
     # (tpr@hi.is)
 
 
     def drawCard(self, card_played, debug=False):
+        player_hand = self.hand[self.player-1]
         # remove card player from hand
         if len(self.deck) > 0:
             new_card = self.deck[0]  # take top card from the deck
             self.deck = self.deck[1:]  # remove the card from the deck
-            print("drawCard played card",card_played)
-            player_hand = self.hand[self.player-1]
-            print("playerhand",player_hand)
+            #print("drawCard played card",card_played)  
+            #print("playerhand",player_hand)
             i = np.where(player_hand == card_played)  # find location of card played in hand
-            print(i)
+            #print(i)
             if debug:
                 print("Hand before change", self.hand)
             if len(i) > 0:
@@ -110,6 +126,18 @@ class SequenceEnv:
                 print("drawCard, could not find this cards in the current hand?!")
                 raise
             if debug:
+                print("Hand after change", self.hand)
+        else:
+            i = np.where(player_hand == card_played)
+            
+            if debug:
+                print("Hand before change", self.hand)
+            if len(i) > 0:
+                self.hand = np.delete(self.hand[self.player-1], i[0][0])
+            else:
+                print("drawCard, could not find this cards in the current hand?!")
+                raise
+            if debug:    
                 print("Hand after change", self.hand)
 
     def getMoves(self, debug=False):
@@ -144,7 +172,7 @@ class SequenceEnv:
             # print("card played is %d or %s" % (cards_on_board[i,j], the_cards[cards_on_board[i,j]]))
             disc = self.player
             played_card = self.cards_on_board[i, j]
-            print("makeMove played_card ", played_card)
+            #print("makeMove played_card ", played_card)
         elif len(legal_moves_1J) > 0:
             k = np.random.choice(range(len(legal_moves_1J)), 1)
             disc = 0  # remove disc!
@@ -154,7 +182,7 @@ class SequenceEnv:
             disc = self.player
             played_card = 49
         else:
-            print("Don't have a legal move for player (can this really happen?): ", player)
+            print("Don't have a legal move for player (can this really happen?): ", self.player)
             disc = -1
             self.no_feasible_move += 1
         if disc >= 0:
@@ -162,7 +190,7 @@ class SequenceEnv:
             # now lets place or remove a disc on the board
             self.discs_on_board[i, j] = disc
             # now we need to draw a new card
-            print("playedcard id", played_card)
+            #print("playedcard id", played_card)
             self.drawCard(played_card)
             # lets pretty print this new state og the game
             #pretty_print(discs_on_board, hand)
@@ -170,7 +198,6 @@ class SequenceEnv:
             # Bætti við að það prentar út hnitin á síðasta spili sem var spilað. Léttara að finna hvar leikmaðurinn vann.
             print("no_feasible_move = ", self.no_feasible_move, " player = ", self.player, " cards in deck = ", len(self.deck),
                   " last played card at coords: (", i, j, ")")
-            
             self.gameover = True
 
         current_player = self.player
@@ -194,11 +221,14 @@ class SequenceEnv:
         for i in range(len(self.hand)):
             print("player ", i + 1, "'s hand: ", [self.the_cards[j] for j in self.hand[i]], sep="")
 
+
     #naive test
     def play_full_game(self):
         while not self.gameover:
             self.makeMove()
-            print(self.discs_on_board)
-        self.pretty_print()
+        print(self.discs_on_board)
+        plt.imshow(self.discs_on_board)
+        plt.colorbar()
+        plt.show()
 
 
