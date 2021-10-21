@@ -35,6 +35,8 @@ class SequenceEnv:
                      'AD', '2D', '3D', '4D', '5D', '6D', '7D', '8D', '9D', '1D', 'QD', 'KD',
                      'AH', '2H', '3H', '4H', '5H', '6H', '7H', '8H', '9H', '1H', 'QH', 'KH',
                      '1J', '1J', '1J', '1J', '2J', '2J', '2J', '2J']
+        
+        self.gameover = False 
 
 
     # (floki@hi.is) #moddað í hlutbundið af oat
@@ -168,6 +170,8 @@ class SequenceEnv:
             # Bætti við að það prentar út hnitin á síðasta spili sem var spilað. Léttara að finna hvar leikmaðurinn vann.
             print("no_feasible_move = ", self.no_feasible_move, " player = ", self.player, " cards in deck = ", len(self.deck),
                   " last played card at coords: (", i, j, ")")
+            
+            self.gameover = True
 
         current_player = self.player
         self.player = current_player % self.num_players + 1
@@ -190,51 +194,11 @@ class SequenceEnv:
         for i in range(len(self.hand)):
             print("player ", i + 1, "'s hand: ", [self.the_cards[j] for j in self.hand[i]], sep="")
 
-    def given_test_run(self):
-
-        # random game player to the end!
-        n = 2  # number of players, they are numbered 1,2,3,4,...
-        deck, hand, discs_on_board = initGame(n)  # initial hand and empty discs on board!
-        pretty_print(discs_on_board, hand)  # lets print the board and see their hand!
-        # lets get three types of legal moves, by normal playing cards, one-eyed Jacks (1J) and two-eyed Jacks (2J):
-        player = 1  # test player "1"
-        # This simple test run assumes that the player will always try to play a normal card first and then use the Jacks.
-        no_feasible_move = 0  # counts how many player in a row say pass!
-        while True:
-            legal_moves, legal_moves_1J, legal_moves_2J = getMoves(discs_on_board, hand, player)
-            if len(legal_moves) > 0:
-                # this is how we would perform a random move using the normal cards:
-                k = np.random.choice(range(len(legal_moves)), 1)
-                (i, j) = tuple(legal_moves[np.random.choice(range(len(legal_moves)), 1)][0])
-                # print("card played is %d or %s" % (cards_on_board[i,j], the_cards[cards_on_board[i,j]]))
-                disc = player
-                played_card = cards_on_board[i, j]
-            elif len(legal_moves_1J) > 0:
-                k = np.random.choice(range(len(legal_moves_1J)), 1)
-                disc = 0  # remove disc!
-                played_card = 48
-            elif len(legal_moves_2J) > 0:
-                k = np.random.choice(range(len(legal_moves_2J)), 1)
-                disc = player
-                played_card = 49
-            else:
-                print("Don't have a legal move for player (can this really happen?): ", player)
-                disc = -1
-                no_feasible_move += 1
-            if disc >= 0:
-                no_feasible_move = 0
-                # now lets place or remove a disc on the board
-                discs_on_board[i, j] = disc
-                # now we need to draw a new card
-                deck, hand[player - 1] = drawCard(deck, hand[player - 1], played_card)
-                # lets pretty print this new state og the game
-                pretty_print(discs_on_board, hand)
-            if (no_feasible_move == n) | (len(deck) == 0) | (True == isTerminal(discs_on_board, player)):
-                # Bætti við að það prentar út hnitin á síðasta spili sem var spilað. Léttara að finna hvar leikmaðurinn vann.
-                print("no_feasible_move = ", no_feasible_move, " player = ", player, " cards in deck = ", len(deck),
-                      " last played card at coords: (", i, j, ")")
-                break
-            player = player % n + 1  # next player in line
-
+    #naive test
+    def play_full_game(self):
+        while not self.gameover:
+            self.makeMove()
+            print(self.discs_on_board)
+        self.pretty_print()
 
 
