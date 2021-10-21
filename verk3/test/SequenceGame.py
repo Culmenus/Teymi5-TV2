@@ -90,6 +90,26 @@ class SequenceEnv:
     # (tpr@hi.is)
 
 
+    def drawCard(self, card_played, debug=False):
+        # remove card player from hand
+        if len(self.deck) > 0:
+            new_card = self.deck[0]  # take top card from the deck
+            self.deck = self.deck[1:]  # remove the card from the deck
+            print("drawCard played card",card_played)
+            player_hand = self.hand[self.player-1]
+            print("playerhand",player_hand)
+            i = np.where(player_hand == card_played)  # find location of card played in hand
+            print(i)
+            if debug:
+                print("Hand before change", self.hand)
+            if len(i) > 0:
+                self.hand[self.player-1][i[0][0]] = new_card  # replace the card played with a new one
+            else:
+                print("drawCard, could not find this cards in the current hand?!")
+                raise
+            if debug:
+                print("Hand after change", self.hand)
+
     def getMoves(self, debug=False):
         # legal moves for normal playing cards
         iH = np.in1d(self.cards_on_board, self.hand[self.player - 1]).reshape(10, 10)  # check for cards in hand
@@ -112,6 +132,7 @@ class SequenceEnv:
             print("")
         return legal_moves, legal_moves_1J, legal_moves_2J
 
+
     def makeMove(self):
         legal_moves, legal_moves_1J, legal_moves_2J = self.getMoves()
         if len(legal_moves) > 0:
@@ -121,6 +142,7 @@ class SequenceEnv:
             # print("card played is %d or %s" % (cards_on_board[i,j], the_cards[cards_on_board[i,j]]))
             disc = self.player
             played_card = self.cards_on_board[i, j]
+            print("makeMove played_card ", played_card)
         elif len(legal_moves_1J) > 0:
             k = np.random.choice(range(len(legal_moves_1J)), 1)
             disc = 0  # remove disc!
@@ -138,9 +160,10 @@ class SequenceEnv:
             # now lets place or remove a disc on the board
             self.discs_on_board[i, j] = disc
             # now we need to draw a new card
-            deck, hand[player - 1] = drawCard(hand[player - 1], played_card)
+            print("playedcard id", played_card)
+            self.drawCard(played_card)
             # lets pretty print this new state og the game
-            pretty_print(discs_on_board, hand)
+            #pretty_print(discs_on_board, hand)
         if (self.no_feasible_move == self.num_players) | (len(self.deck) == 0) | (True == self.isTerminal()):
             # Bætti við að það prentar út hnitin á síðasta spili sem var spilað. Léttara að finna hvar leikmaðurinn vann.
             print("no_feasible_move = ", self.no_feasible_move, " player = ", self.player, " cards in deck = ", len(self.deck),
@@ -148,25 +171,8 @@ class SequenceEnv:
 
         current_player = self.player
         self.player = current_player % self.num_players + 1
-
-
     # get all feasible moved for normal cards, one-eyed jacks and two-eyed jacks
-    def drawCard(self, card_played, debug=False):
-        # remove card player from hand
-        if len(self.deck) > 0:
-            new_card = self.deck[0]  # take top card from the deck
-            self.deck = self.deck[1:]  # remove the card from the deck
-            i = np.where(self.hand == card_played)  # find location of card played in hand
-            if debug:
-                print("Hand before change", self.hand)
-            if len(i) > 0:
-                self.hand[i[0][0]] = new_card  # replace the card played with a new one
-            else:
-                print("drawCard, could not find this cards in the current hand?!")
-                raise
-            if debug:
-                print("Hand after change", self.hand)
-        return self.deck, self.hand
+
 
     # printing the board is useful for debugging code...
     def pretty_print(self):
