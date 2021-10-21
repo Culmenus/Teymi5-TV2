@@ -5,13 +5,14 @@ class SequenceEnv:
     def __init__(self, num_players = 2):
         # some global variables used by the games, what we get in the box!
         self.num_players = num_players
+        self.player = 1
         self.discs_on_board = np.zeros((10, 10), dtype='int8')  # empty!
         self.discs_on_board[np.ix_([0, 0, 9, 9], [0, 9, 0, 9])] = -1  # the corners are "-1"
+        self.no_feasible_move = 0  # counts how many player in a row say pass! FINNST ÞETTA FURÐULEG BREYTA.
         # There are two decks of cards each with 48 unique cards if we remove the Jacks lets label them 0,...,47
         # Let card 48 by one-eyed Jack and card 49 be two-eyed jack there are 4 each of these
         self.cards = np.hstack((np.arange(48), np.arange(48), 48, 48, 48, 48, 49, 49, 49, 49))
-        self.deck = self.cards[np.argsort(
-            np.random.rand(104))]  # here we shuffle the cards, note we cannot use shuffle (we have non-unique cards)
+        self.deck = self.cards[np.argsort(np.random.rand(104))]  # here we shuffle the cards, note we cannot use shuffle (we have non-unique cards)
         # now lets deal out the hand, each player gets m[n] cards
         self.m = [None, None, 7, 6, 6]
         self.hand = []
@@ -35,9 +36,10 @@ class SequenceEnv:
                      'AH', '2H', '3H', '4H', '5H', '6H', '7H', '8H', '9H', '1H', 'QH', 'KH',
                      '1J', '1J', '1J', '1J', '2J', '2J', '2J', '2J']
 
+
     # (floki@hi.is) #moddað í hlutbundið af oat
     # test er staða á borðinu og er 10x10 np matrix
-    def isTerminal(self, player):
+    def isTerminal(self):
         tempWin = [[1, 1, 1, 1, 1, 0, 0, 0, 0, 0],
                    [0, 1, 1, 1, 1, 1, 0, 0, 0, 0],
                    [0, 0, 1, 1, 1, 1, 1, 0, 0, 0],
@@ -45,8 +47,8 @@ class SequenceEnv:
                    [0, 0, 0, 0, 1, 1, 1, 1, 1, 0],
                    [0, 0, 0, 0, 0, 1, 1, 1, 1, 1]]
         temp_board = self.discs_on_board.copy()
-        temp_board[temp_board == -1] = player
-        test = temp_board == player
+        temp_board[temp_board == -1] = self.player
+        test = temp_board == self.player
         # test[row][col] = 1
         max_col = len(test[0])
         max_row = len(test)
@@ -87,22 +89,6 @@ class SequenceEnv:
 
     # (tpr@hi.is)
 
-    # initialize the game, n is the number of players
-    def initGame(self, n=2):
-        discs_on_board = np.zeros((10, 10), dtype='int8')  # empty!
-        discs_on_board[np.ix_([0, 0, 9, 9], [0, 9, 0, 9])] = -1  # the corners are "-1"
-        # There are two decks of cards each with 48 unique cards if we remove the Jacks lets label them 0,...,47
-        # Let card 48 by one-eyed Jack and card 49 be two-eyed jack there are 4 each of these
-        cards = np.hstack((np.arange(48), np.arange(48), 48, 48, 48, 48, 49, 49, 49, 49))
-        deck = cards[np.argsort(
-            np.random.rand(104))]  # here we shuffle the cards, note we cannot use shuffle (we have non-unique cards)
-        # now lets deal out the hand, each player gets m[n] cards
-        m = [None, None, 7, 6, 6]
-        hand = []
-        for i in range(n):
-            hand.append(deck[:m[n]])  # deal player i m[n] cards
-            deck = deck[m[n]:]  # remove cards from deck
-        return deck, hand, discs_on_board
 
     def getMoves(self, debug=False):
         # legal moves for normal playing cards
@@ -125,6 +111,44 @@ class SequenceEnv:
                 print(self.the_cards[self.cards_on_board[i, j]], end=" ")
             print("")
         return legal_moves, legal_moves_1J, legal_moves_2J
+
+    def makeMove(self):
+        legal_moves, legal_moves_1J, legal_moves_2J = self.getMoves()
+        if len(legal_moves) > 0:
+            # this is how we would perform a random move using the normal cards:
+            k = np.random.choice(range(len(legal_moves)), 1)
+            (i, j) = tuple(legal_moves[np.random.choice(range(len(legal_moves)), 1)][0])
+            # print("card played is %d or %s" % (cards_on_board[i,j], the_cards[cards_on_board[i,j]]))
+            disc = self.player
+            played_card = self.cards_on_board[i, j]
+        elif len(legal_moves_1J) > 0:
+            k = np.random.choice(range(len(legal_moves_1J)), 1)
+            disc = 0  # remove disc!
+            played_card = 48
+        elif len(legal_moves_2J) > 0:
+            k = np.random.choice(range(len(legal_moves_2J)), 1)
+            disc = self.player
+            played_card = 49
+        else:
+            print("Don't have a legal move for player (can this really happen?): ", player)
+            disc = -1
+            self.no_feasible_move += 1
+        if disc >= 0:
+            no_feasible_move = 0
+            # now lets place or remove a disc on the board
+            self.discs_on_board[i, j] = disc
+            # now we need to draw a new card
+            deck, hand[player - 1] = drawCard(hand[player - 1], played_card)
+            # lets pretty print this new state og the game
+            pretty_print(discs_on_board, hand)
+        if (self.no_feasible_move == self.num_players) | (len(self.deck) == 0) | (True == self.isTerminal()):
+            # Bætti við að það prentar út hnitin á síðasta spili sem var spilað. Léttara að finna hvar leikmaðurinn vann.
+            print("no_feasible_move = ", self.no_feasible_move, " player = ", self.player, " cards in deck = ", len(self.deck),
+                  " last played card at coords: (", i, j, ")")
+
+        current_player = self.player
+        self.player = current_player % self.num_players + 1
+
 
     # get all feasible moved for normal cards, one-eyed jacks and two-eyed jacks
     def drawCard(self, card_played, debug=False):
