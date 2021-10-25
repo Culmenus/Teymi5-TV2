@@ -208,11 +208,13 @@ class SequenceEnv:
         self.player = current_player % self.num_players + 1
     # get all feasible moved for normal cards, one-eyed jacks and two-eyed jacks
 
-    def heuristic_1(self, temp_board, i, j):
+    def heuristic_1(self, temp_board, pos):
         # Namminamm
         # temp_board: discs_on_board, nema player í stað -1 í hornunum
 
         s = 0
+        i = pos[0]
+        j = pos[1]
         board_rows = 10
         board_cols = 10
 
@@ -296,8 +298,11 @@ class SequenceEnv:
                     s += min(min(t - mint, maxt - t), range - 5) + 1
                     t -= 1
 
-    def update_heuristic_1(self, i, j):
+    def update_heuristic_1(self, pos):
         # Uppfæra Heuristic 1 eftir leik
+
+        i = pos[0]
+        j = pos[1]
 
         temp_board = self.discs_on_board.copy()
         temp_board[temp_board == -1] = self.player
@@ -319,7 +324,12 @@ class SequenceEnv:
                     break
                 self.heuristic_1_table[self.player-1][i-t][j] = self.heuristic_1(temp_board, i-t, j)
     
-    def set_attributes(self):
+    def set_attributes(self, pos=None):
+        if pos is not None:
+            # Uppfæra eftir leik; forðast óþarfa útreikninga
+            # Pos: tuple (i, j); þar sem síðasti leikmaður lék
+            pass
+        
         temp_board = self.discs_on_board.copy().flatten()
         temp_board = temp_board[temp_board != -1]
 
@@ -349,9 +359,6 @@ class SequenceEnv:
         # Skeyti hönd aftan við borð, fjöldi spila á indexi. Ef sett er hand í stað hönd skeytist nr. spila við, mögulega jafngóð kóðun
         return torch.cat((one_hot, torch.tensor(hond)))
         """
-
-    def update_attributes(self):
-        pass
 
     # printing the board is useful for debugging code...
     def pretty_print(self):
