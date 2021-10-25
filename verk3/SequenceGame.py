@@ -21,6 +21,8 @@ class SequenceEnv:
             self.hand.append(self.deck[:self.m[num_players]])  # deal player i m[n] cards
             self.deck = self.deck[self.m[num_players]:]  # remove cards from deck
 
+        self.attributes = np.array()
+
         self.cards_on_board = np.matrix([[-1, 0, 11, 10, 9, 8, 7, 6, 5, -1],
                                     [24, 18, 19, 20, 21, 22, 23, 12, 4, 13],
                                     [35, 17, 9, 8, 7, 6, 5, 25, 3, 14],
@@ -316,6 +318,40 @@ class SequenceEnv:
                 if temp_board[i-t][j] != 0 and temp_board[i-t][j] != p:
                     break
                 self.heuristic_1_table[self.player-1][i-t][j] = self.heuristic_1(temp_board, i-t, j)
+    
+    def set_attributes(self):
+        temp_board = self.discs_on_board.copy().flatten()
+        temp_board = temp_board[temp_board != -1]
+
+        # One hot encoding á borði
+        one_hot_board = np.zeros((temp_board.size, self.num_players+1))
+        one_hot_board[np.arange(temp_board.size),temp_board] = 1
+        one_hot_board = one_hot_board.flatten()
+        
+        # Hönd
+        hond = np.zeros(50, dtype=np.uint8)
+        np.add.at(hond, self.hand, 1)
+        
+        self.attributes = np.concatenate(one_hot_board, hond)
+
+        """
+        # ELÍAS
+        temp_board = self.discs_on_board.copy().flatten()
+        # ATH. Segi að það sé enginn leikmaður á hornunum. Þetta þarf að endurskoða, kannski sleppa.
+        temp_board = temp_board[temp_board != -1]
+        # One hot encoding á borði
+        one_hot = torch.nn.functional.one_hot(torch.tensor(temp_board).long(), num_classes = n + 1)
+        # Flet borðið út. Hér væri líka hægt að halda forminu og breyta kóðun á hönd
+        one_hot = one_hot.flatten()
+        # Kóða höndina eins og talað var um
+        hond = np.zeros((50), dtype = np.int32)
+        np.add.at(hond, hand, 1)
+        # Skeyti hönd aftan við borð, fjöldi spila á indexi. Ef sett er hand í stað hönd skeytist nr. spila við, mögulega jafngóð kóðun
+        return torch.cat((one_hot, torch.tensor(hond)))
+        """
+
+    def update_attributes(self):
+        pass
 
     # printing the board is useful for debugging code...
     def pretty_print(self):
