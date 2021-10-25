@@ -11,7 +11,7 @@ class DeepQNetwork(nn.module):
         super(DeepQNetwork, self).__init__()
         self.input_dims = input_dims
         self.fc1_dims = fc1_dims
-        self.fc2_dims = fc2 dims
+        self.fc2_dims = fc2_dims
         self.n_actions = n_actions
         #extend for 2d matrix https://www.youtube.com/watch?v=wc-FxNENg9U&t=267s
         self.fc1 = nn.Linear(*self.input_dims, self.fc1_dims) 
@@ -47,8 +47,8 @@ class Agent():
         self.Q_eval = DeepQNetwork(self.lr, n_actions=n_actions, input_dims=input_dims,
                                    fc1_dims=256, fc2_dims=256)
         
-        self.state_memory = np.zeros((self.mem_size, *input_dims), dtype=float32)
-        self.new_state_memory = np.zeros((self.mem_size, *input_dims), dtype=float32)
+        self.state_memory = np.zeros((self.mem_size, *input_dims), dtype=np.float32)
+        self.new_state_memory = np.zeros((self.mem_size, *input_dims), dtype=np.float32)
         
         self.action_memory = np.zeros(self.mem_size, dtype=np.int32)
         self.reward_memory = np.zeros(self.mem_size, dtype=np.float32)
