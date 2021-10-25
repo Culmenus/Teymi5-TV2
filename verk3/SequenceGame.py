@@ -37,7 +37,9 @@ class SequenceEnv:
                      'AH', '2H', '3H', '4H', '5H', '6H', '7H', '8H', '9H', '1H', 'QH', 'KH',
                      '1J', '1J', '1J', '1J', '2J', '2J', '2J', '2J']
         
-        self.gameover = False 
+        self.gameover = False
+
+        self.heuristic_1_table = np.zeros(num_players, 10, 10)
 
 
     # (floki@hi.is) #moddað í hlutbundið af oat
@@ -95,9 +97,9 @@ class SequenceEnv:
                 if temp_sum >= 5:
                     if self.num_players == 2:
                         player_sum = player_sum + temp_sum
-                        extra_sum0 = sum(np.multiply(extraWin[0], i));
-                        extra_sum1 = sum(np.multiply(extraWin[1], i));
-                        extra_sum2 = sum(np.multiply(extraWin[2], i));
+                        extra_sum0 = sum(np.multiply(extraWin[0], i))
+                        extra_sum1 = sum(np.multiply(extraWin[1], i))
+                        extra_sum2 = sum(np.multiply(extraWin[2], i))
                         if player_sum >= 10 or extra_sum0 >= 9 or extra_sum1 >= 9 or extra_sum2 >= 10:
                             return True
                         break
@@ -204,6 +206,116 @@ class SequenceEnv:
         self.player = current_player % self.num_players + 1
     # get all feasible moved for normal cards, one-eyed jacks and two-eyed jacks
 
+    def heuristic_1(self, temp_board, i, j):
+        # Namminamm
+        # temp_board: discs_on_board, nema player í stað -1 í hornunum
+
+        s = 0
+        board_rows = 10
+        board_cols = 10
+
+        # Horizontal
+        mint = max(-4, -j)
+        maxt = min(4, board_cols-1-j)
+        t = mint
+        while t < 0:
+            if temp_board[i][j+t] != self.player and temp_board[i][j+t] != 0:
+                mint = t+1
+        t = maxt
+        while t > 0:
+            if temp_board[i][j+t] != self.player and temp_board[i][j+t] != 0:
+                maxt = t-1
+
+        range = maxt - mint + 1
+        if range >= 5:
+            t = mint
+            while t <= maxt:
+                if temp_board[i][j+t] == self.player:
+                    s += min(min(t - mint, maxt - t), range - 5) + 1
+            t -= 1
+
+        # Vertical
+        mint = max(-4, -i)
+        maxt = min(4, board_rows-1-i)
+        t = mint
+        while t < 0:
+            if temp_board[i+t][j] != self.player and temp_board[i+t][j] != 0:
+                mint = t+1
+        t = maxt
+        while t > 0:
+            if temp_board[i+t][j] != self.player and temp_board[i+t][j] != 0:
+                maxt = t-1
+
+        range = maxt - mint + 1
+        if range >= 5:
+            t = mint
+            while t <= maxt:
+                if temp_board[i+t][j] == self.player:
+                    s += min(min(t - mint, maxt - t), range - 5) + 1
+                    t -= 1
+        
+        # Main diagonal
+        mint = max(-4, max(-i, -j))
+        maxt = min(4, min(board_rows-1-i, board_rows-1-j))
+        t = mint
+        while t < 0:
+            if temp_board[i+t][j+t] != self.player and temp_board[i+t][j+t] != 0:
+                mint = t+1
+        t = maxt
+        while t > 0:
+            if temp_board[i+t][j+t] != self.player and temp_board[i+t][j+t] != 0:
+                maxt = t-1
+
+        range = maxt - mint + 1
+        if range >= 5:
+            t = mint
+            while t <= maxt:
+                if temp_board[i+t][j+t] == self.player:
+                    s += min(min(t - mint, maxt - t), range - 5) + 1
+                    t -= 1
+        
+        # Antidiagonal
+        mint = max(-4, max(-i, board_rows-1-j))
+        maxt = min(4, min(board_rows-1-i, -j))
+        t = mint
+        while t < 0:
+            if temp_board[i+t][j-t] != self.player and temp_board[i+t][j-t] != 0:
+                mint = t+1
+        t = maxt
+        while t > 0:
+            if temp_board[i+t][j-t] != self.player and temp_board[i+t][j-t] != 0:
+                maxt = t-1
+
+        range = maxt - mint + 1
+        if range >= 5:
+            t = mint
+            while t <= maxt:
+                if temp_board[i+t][j-t] == self.player:
+                    s += min(min(t - mint, maxt - t), range - 5) + 1
+                    t -= 1
+
+    def update_heuristic_1(self, i, j):
+        # Uppfæra Heuristic 1 eftir leik
+
+        temp_board = self.discs_on_board.copy()
+        temp_board[temp_board == -1] = self.player
+
+        for p in range(self.num_players):
+            if p+1 == self.player:
+                self.heuristic_1_table[p][i][j] = self.heuristic_1(temp_board, i, j)
+            else:
+                self.heuristic_1_table[p][i][j] = 0
+
+        # Horizontal
+        for p in range(self.num_players):
+            for t in range(1, 5):
+                if temp_board[i+t][j] != 0 and temp_board[i+t][j] != p:
+                    break
+                self.heuristic_1_table[self.player-1][i+t][j] = self.heuristic_1(temp_board, i+t, j)
+            for t in range(1, 5):
+                if temp_board[i-t][j] != 0 and temp_board[i-t][j] != p:
+                    break
+                self.heuristic_1_table[self.player-1][i-t][j] = self.heuristic_1(temp_board, i-t, j)
 
     # printing the board is useful for debugging code...
     def pretty_print(self):
