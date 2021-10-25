@@ -327,8 +327,20 @@ class SequenceEnv:
     def set_attributes(self, pos=None):
         if pos is not None:
             # Uppfæra eftir leik; forðast óþarfa útreikninga
+            # Mjög „optimised“; ekki þægilegt að vinna með
             # Pos: tuple (i, j); þar sem síðasti leikmaður lék
-            pass
+            i = pos[0]
+            j = pos[1]
+            attr_pos = 4 * (10*i + j)
+            attr_pos += self.discs_on_board[attr_pos]
+            if i > 0:
+                if i > 8:
+                    attr_pos -= 12
+                else:
+                    attr_pos -= 8
+            else:
+                attr_pos -= 4
+
         
         temp_board = self.discs_on_board.copy().flatten()
         temp_board = temp_board[temp_board != -1]
