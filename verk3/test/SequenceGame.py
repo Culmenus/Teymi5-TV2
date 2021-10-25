@@ -226,9 +226,9 @@ class SequenceEnv:
     def play_full_game(self):
         while not self.gameover:
             self.makeMove()
-        print(self.discs_on_board)
-        plt.imshow(self.discs_on_board)
-        plt.colorbar()
-        plt.show()
+            print(self.discs_on_board)
+            plt.imshow(self.discs_on_board)
+            plt.colorbar()
+            plt.show()
 
 
