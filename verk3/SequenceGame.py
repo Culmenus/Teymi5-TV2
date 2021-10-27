@@ -15,7 +15,7 @@ class SequenceEnv:
         self.cards = np.hstack((np.arange(48), np.arange(48), 48, 48, 48, 48, 49, 49, 49, 49))
         self.deck = self.cards[np.argsort(np.random.rand(104))]  # here we shuffle the cards, note we cannot use shuffle (we have non-unique cards)
         # now lets deal out the hand, each player gets m[n] cards
-        self.m = [None, None, 7, 6, 6]
+        self.m = (None, None, 7, 6, 6)
         self.hand = []
         for i in range(num_players):
             self.hand.append(self.deck[:self.m[num_players]])  # deal player i m[n] cards
@@ -301,8 +301,7 @@ class SequenceEnv:
     def update_heuristic_1(self, pos):
         # Uppfæra Heuristic 1 eftir leik
 
-        i = pos[0]
-        j = pos[1]
+        i, j = pos
 
         temp_board = self.discs_on_board.copy()
         temp_board[temp_board == -1] = self.player
