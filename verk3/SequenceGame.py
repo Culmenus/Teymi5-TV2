@@ -329,17 +329,20 @@ class SequenceEnv:
             # Uppfæra eftir leik; forðast óþarfa útreikninga
             # Mjög „optimised“; ekki þægilegt að vinna með
             # Pos: tuple (i, j); þar sem síðasti leikmaður lék
-            i = pos[0]
-            j = pos[1]
-            attr_pos = 4 * (10*i + j)
+            i, j = pos
+
+            # Staður í eigindavigri; nauðsynlegt að taka tillit til hornanna
+            attr_pos = 4 * (10*i + j - 1)
             attr_pos += self.discs_on_board[attr_pos]
-            if i > 0:
-                if i > 8:
-                    attr_pos -= 12
-                else:
-                    attr_pos -= 8
-            else:
+            if i > 8:
+                attr_pos -= 8
+            elif i > 0:
                 attr_pos -= 4
+            
+            # Uppfæra þann stað
+            new_attr = np.zeros(self.num_players + 1)
+            new_attr[self.discs_on_board[i,j]] = 1
+            self.attributes[attr_pos:attr_pos+self.num_players] = new_attr
 
         
         temp_board = self.discs_on_board.copy().flatten()
@@ -388,7 +391,6 @@ class SequenceEnv:
         for i in range(len(self.hand)):
             print("player ", i + 1, "'s hand: ", [self.the_cards[j] for j in self.hand[i]], sep="")
 
-
     #naive test
     def play_full_game(self):
         while not self.gameover:
@@ -397,5 +399,3 @@ class SequenceEnv:
             plt.imshow(self.discs_on_board)
             plt.colorbar()
             plt.show()
-
-
