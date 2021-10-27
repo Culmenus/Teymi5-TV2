@@ -168,6 +168,7 @@ class SequenceEnv:
 
 
     def makeMove(self):
+      # Þetta þarf að bæta, taka inn stefnu og spila eftir henni
         legal_moves, legal_moves_1J, legal_moves_2J = self.getMoves()
         if len(legal_moves) > 0:
             # this is how we would perform a random move using the normal cards:
@@ -345,7 +346,7 @@ class SequenceEnv:
 
         
         temp_board = self.discs_on_board.copy().flatten()
-        temp_board = temp_board[temp_board != -1]
+        temp_board = temp_board[temp_board != -1] # Athuga hvort þetta sé skynsamlegt. Mikilvægt að tekið sé tillit til hornanna í is Terminal
 
         # One hot encoding á borði
         one_hot_board = np.zeros((temp_board.size, self.num_players+1))
