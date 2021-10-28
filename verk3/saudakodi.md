@@ -1,4 +1,4 @@
-# Hugmynd:
+# Hugmynd 1:
 
 - Spila nokkra leiki epsilon-greedy, safna upplýsingum (s, v) (hvaða target?)
 - Fóðra tauganet með þessum upplýsingum, fá bætt virðisfall
@@ -13,6 +13,10 @@
       for j in batch_size:
         v.append(play())        # play skilar reynslunni (s, v)
       nn.learn(v)               # Notum innbyggðar lærdómsaðferðir úr torch
+
+# Hugmynd 2 (betri)
+
+- Spila leiki epsilon-greedy, gera TD-lambda uppfærslur jafnóðum
 
 
 <!-- Oddur að pæla eitthvað hér fyrir neðan-->
