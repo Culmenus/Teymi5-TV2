@@ -27,7 +27,7 @@ import SequenceEnv()
 env = SequenceEnv()
 state = env.gameInit(num_players = 2)
 
-num_obersvable_features = len(np.flatten(state.discs_on_board)) + len(env.hand[0] #lengd á fletjuðu borði og init hendi player 1 sem fyrir 
+num_obersvable_features = len(np.flatten(state.discs_on_board)) + len(env.hand[0] #lengd á fletjuðu borði og init hendi player 1 sem fyrir
                                                                                  #tvo playera væri 7 að lengd.
 
 state_values = np.zeros(num_obersvable_features) # value reita og handa?
@@ -48,12 +48,12 @@ For episodes:
 	For steps in episode:
 		moves <- getMoves(S, hands[player])
 		for move in moves:
-			**find maxValue of value(play(S,move)) 
+			**find maxValue of value(play(S,move))
 		# action from epsilon greedy policy
 		action <- maxValue or epsilon random
 		# Observation of new state and reward
 		Sˆ, R <- play(S, action) # R \in (0, 0.5, 1) in terminal states for (loss, tie, win)
-		# Decay elegibility trace and update for 
+		# Decay elegibility trace and update for
 			previous state
 		z[player] <- gamma*lamda*z[player] + value_gradient(S, w)
 		# Create target
@@ -63,11 +63,13 @@ For episodes:
 			# Update parameters
 			w <- w + alpha*delta[1]*z[1]
 			w <- w + alpha*delta[2]*z[2]
+		else if state is terminal:
+			w <- w + alpha*delta[player]*z[player]
 		If S is terminal:
-			break	
+			break
 		S <- Sˆ
 		player <- 3 - player # For hand and end board
-		invert_board()	
+		invert_board()
 ```
 
 # Value function
@@ -79,4 +81,4 @@ The attributes will be represented by a one-dimensional array consisting of the 
 - The cards in hand, represented by a 50-element vector whose elements in turn represent the number of a given card in the current hand
 - The trash pile (used cards), represented in the same way as the current hand
 
-The reward function will return 0 for any state other than a terminal state. The reward will be 1 for a win, -1 for a loss and 0 for a draw.
+The reward function will return 0 for entering any state other than a terminal state. The reward for entering a terminal state will be 1 for a win and 0.5 for a draw. Note that entering a terminal state cannot result in a loss. The value for a terminal state will be around 0 (imperfections may result due to the approximate nature of the value function), and no reward will be obtained after entering a terminal state.
