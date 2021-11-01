@@ -52,22 +52,22 @@ For episodes:
 		# action from epsilon greedy policy
 		action <- maxValue or epsilon random
 		# Observation of new state and reward
-		Sˆ, R <- play(S, action)
+		Sˆ, R <- play(S, action) # R \in (0, 0.5, 1) in terminal states for (loss, tie, win)
 		# Decay elegibility trace and update for 
 			previous state
 		z[player] <- gamma*lamda*z[player] + value_gradient(S, w)
 		# Create target
 		delta[player] <- R + gamma*value(Sˆ, w) - value(S, w)
-		# Update every other time
+		# Update every other time so that the parameters are stable for one round
 		if player=2:
 			# Update parameters
 			w <- w + alpha*delta[1]*z[1]
 			w <- w + alpha*delta[2]*z[2]
-		S <- Sˆ
 		If S is terminal:
-			break
+			break	
+		S <- Sˆ
 		player <- 3 - player # For hand and end board
 		invert_board()	
 ```
 
-The value() function will be a pytorch neural network object. The parameter update will therefore be stochastic gradient decent that takes elegibility traces into account. Additionally it would be possible to save pairs of states and their value approximations in order to squeeze more out of that data with batch learning.
+The value() function will be a pytorch neural network object, with an input layer for a vector of the board and hand, two fully connected hidden layers and an output layer of a single value. The parameter update will therefore be stochastic gradient decent that takes elegibility traces into account. Additionally it would be possible to save pairs of states and their value approximations in order to squeeze more out of that data with batch learning.
