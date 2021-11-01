@@ -17,6 +17,6 @@ REINFORCE solves this by sampling whole episodes and updating the parameters of 
 
 The core problem that value-based methods encounter in this exercise is that the state is parametrized; it is not fully observable given the chosen parametrization. This breaks the Markov property, so the theorem stating the existence of a deterministic optimal policy does not apply in this case.
 
-## What are actor-critic methods and how is it different from REINFORCE with baseline?
+## What are actor-critic methods and how are they different from REINFORCE with baseline?
 
 While REINFORCE uses a MC approach, the actor-critic methods use a TD approach. That is, REINFORCE first produces a whole episode and uses the full return in its target along with a state-value function for its baseline. The actor-critic methods use for instance the one-step return or the lambda return in its target (alongside the critic's value function). This makes for a fully online and incremental algorithm, something REINFORCE is not.
