@@ -2,7 +2,8 @@
 Elías Bjartur Einarsson (ebe19), 1. nóvember 2021
 
 ## How is a policy gradient method different from the action value methods we have discussed so far?
-Policy gradient relies on optimizing parametrized policies with respect to the expected return (long-term cumulative reward) by gradient descent
+Policy gradient relies on optimizing parametrized policies with respect to the expected return (long-term cumulative reward) by gradient descent.
+
 The core difference between policy gradient methods and previous, purely value-based methods is that the policy is parametrized rather than implied from the value function. This allows for the policy to be updated independent of any estimate of the value function, although a value function may still be used in conjunction with these methods.
 
 In the value and action-value methods we had a value function approximator and the policy was implicit with respect to that, epsilon greedy with respect to the values for example. The policy gradient method has no representation of the value of a state or state-action pair but simply an explicit policy. Of course policy methods can be combined with action-value methods and then there would be a representation of state or state-action values.
