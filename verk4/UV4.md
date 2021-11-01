@@ -1,8 +1,8 @@
 # UV4
-Elías Bjartur Einarsson (ebe19), 1. nóvember 2021
+Teymi 5, 1. nóvember 2021
 
 ## How is a policy gradient method different from the action value methods we have discussed so far?
-Policy gradient relies on optimizing parametrized policies with respect to the expected return (long-term cumulative reward) by gradient descent.
+Policy gradient relies on optimizing parameterized policies with respect to the expected return (long-term cumulative reward) by gradient descent.
 
 The core difference between policy gradient methods and previous, purely value-based methods is that the policy is parametrized rather than implied from the value function. This allows for the policy to be updated independent of any estimate of the value function, although a value function may still be used in conjunction with these methods.
 
@@ -15,7 +15,7 @@ Policy gradient methods can be beneficial for certain problems, for instance whe
 The main reason REINFORCE solves this exercise is because it does not base its policy on a value function that would be bound to be identical for these states under the relevant features. A policy working to maximise the value would be stuck with the same actions for each square while a policy function can choose a probability distribution for the possible actions.
 REINFORCE solves this by sampling whole episodes and updating the parameters of the policy function w.r.t. the return and the gradient of (the log of) the policy function. Eventually it will learn to take actions right or left with the optimal probability.  
 
-The core problem that value-based methods encounter in this exercise is that the state is parametrized; it is not fully observable given the chosen parametrization. This breaks the Markov property, so the theorem stating the existence of a deterministic optimal policy does not apply in this case.
+The core problem that value-based methods encounter in this exercise is that the state is represented by features that so that distinguishing the squeres is not possible; it is not fully observable given the chosen features. This breaks the Markov property, so the theorem stating the existence of a deterministic optimal policy does not apply in this case.
 
 ## What are actor-critic methods and how are they different from REINFORCE with baseline?
 
