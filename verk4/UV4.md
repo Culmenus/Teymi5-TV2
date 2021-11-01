@@ -19,5 +19,4 @@ The core problem that value-based methods encounter in this exercise is that the
 
 ## What are actor-critic methods and how are they different from REINFORCE with baseline?
 
-While REINFORCE uses a MC approach, the actor-critic methods use a TD approach. That is, REINFORCE first produces a whole episode and uses the full return in its target along with a state-value function for its baseline. The actor-critic methods use for instance the one-step return or the lambda return in its target (alongside the critic's value function). This makes for a fully online and incremental algorithm, something REINFORCE is not.
-Both methods also have different formula to  how (and when) to calculate the prediction error estimate δ.
+While REINFORCE uses a MC approach, the actor-critic methods use a TD approach. That is, REINFORCE first produces a whole episode and uses the full, unbiased, high-variance return in its target along with a state-value function for its baseline. The actor-critic methods, on the other hand, use for instance the one-step or lambda return in its target (alongside the critic's value function). This makes for a fully online and incremental algorithm, in stark contrast to REINFORCE.
