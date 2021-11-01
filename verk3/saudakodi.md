@@ -52,21 +52,31 @@ For episodes:
 		# action from epsilon greedy policy
 		action <- maxValue or epsilon random
 		# Observation of new state and reward
-		Sˆ, R <- play(S, action)
+		Sˆ, R <- play(S, action) # R \in (0, 0.5, 1) in terminal states for (loss, tie, win)
 		# Decay elegibility trace and update for 
 			previous state
-		z[player] <- gamma*lamda*z[player] + value_gradient
+		z[player] <- gamma*lamda*z[player] + value_gradient(S, w)
 		# Create target
 		delta[player] <- R + gamma*value(Sˆ, w) - value(S, w)
+		# Update every other time so that the parameters are stable for one round
 		if player=2:
 			# Update parameters
 			w <- w + alpha*delta[1]*z[1]
 			w <- w + alpha*delta[2]*z[2]
+		If S is terminal:
+			break	
 		S <- Sˆ
 		player <- 3 - player # For hand and end board
-		invert_board()
-		If S is terminal:
-			break
+		invert_board()	
 ```
 
-The value() function will be a pytorch neural network object. The parameter update will therefore be stochastic gradient decent that takes elegibility traces into account.
+# Value function
+
+The value() function will be a pytorch neural network object, with an input layer for a vector of the board and hand, two fully connected hidden layers and an output layer of a single value. The parameter update will therefore be stochastic gradient decent that takes elegibility traces into account. Additionally it would be possible to save pairs of states and their value approximations in order to squeeze more out of that data with batch learning.
+
+The attributes will be represented by a one-dimensional array consisting of the following:
+- The board, represented with a one-hot encoding of each tile
+- The cards in hand, represented by a 50-element vector whose elements in turn represent the number of a given card in the current hand
+- The trash pile (used cards), represented in the same way as the current hand
+
+The reward function will return 0 for any state other than a terminal state. The reward will be 1 for a win, -1 for a loss and 0 for a draw.
