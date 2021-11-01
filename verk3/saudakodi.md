@@ -70,4 +70,11 @@ For episodes:
 		invert_board()	
 ```
 
+# Value function
+
 The value() function will be a pytorch neural network object, with an input layer for a vector of the board and hand, two fully connected hidden layers and an output layer of a single value. The parameter update will therefore be stochastic gradient decent that takes elegibility traces into account. Additionally it would be possible to save pairs of states and their value approximations in order to squeeze more out of that data with batch learning.
+
+The attribute vector will consist of the following:
+- The board, represented with a one-hot encoding of each tile
+- The cards in hand, represented by a 50-dimensional vector whose elements in turn represent the number of a given card in the current hand
+- The trash pile (used cards), represented in the same way as the current hand
