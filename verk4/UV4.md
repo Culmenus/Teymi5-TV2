@@ -15,6 +15,8 @@ Policy gradient methods can be beneficial for certain problems, for instance whe
 The main reason REINFORCE solves this exercise is because it does not base its policy on a value function that would be bound to be identical for these states under the relevant features. A policy working to maximise the value would be stuck with the same actions for each square while a policy function can choose a probability distribution for the possible actions.
 REINFORCE solves this by sampling whole episodes and updating the parameters of the policy function w.r.t. the return and the gradient of (the log of) the policy function. Eventually it will learn to take actions right or left with the optimal probability.  
 
+The core problem that value-based methods encounter in this exercise is that the state is parametrized; it is not fully observable given the chosen parametrization. This breaks the Markov property, so the theorem stating the existence of a deterministic optimal policy does not apply in this case.
+
 ## What are actor-critic methods and how is it different from REINFORCE with baseline?
 
 While REINFORCE uses a MC approach, the actor-critic methods use a TD approach. That is, REINFORCE first produces a whole episode and uses the full return in its target along with a state-value function for its baseline. The actor-critic methods use for instance the one-step return or the lambda return in its target (alongside the critic's value function). This makes for a fully online and incremental algorithm, something REINFORCE is not.
