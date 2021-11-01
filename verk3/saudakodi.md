@@ -79,4 +79,4 @@ The attributes will be represented by a one-dimensional array consisting of the 
 - The cards in hand, represented by a 50-element vector whose elements in turn represent the number of a given card in the current hand
 - The trash pile (used cards), represented in the same way as the current hand
 
-The reward function will return 0 for any state other than a terminal state. The reward will be 1 for a win, -1 for a loss and 0 for a draw.
+The reward function will return 0 for any transition to a state other than a terminal state. The reward will be 1 for a win, -1 for a loss and 0 for a draw.
