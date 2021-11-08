@@ -410,9 +410,6 @@ class SequenceEnv:
         # TODO: Vertical & diagonal
     
     def set_attributes(self, pos=None, old_card=None, new_card=None):
-        temp_board = self.discs_on_board[0].copy().flatten()
-        temp_board = temp_board[temp_board != -1] # Athuga hvort þetta sé skynsamlegt. Mikilvægt að tekið sé tillit til hornanna í is Terminal
-
         if pos is not None:
             # Uppfæra eftir leik; forðast óþarfa útreikninga
             # Mjög „optimised“; ekki þægilegt að vinna með
@@ -422,7 +419,7 @@ class SequenceEnv:
             # Staður í eigindavigri; nauðsynlegt að taka tillit til hornanna
             c = self.num_players + 1
             attr_pos = c * (10*i + j - 1)
-            attr_pos += self.discs_on_board[0,i,j]
+            attr_pos += self.discs_on_board[0][i,j]
             if i > 8:
                 attr_pos -= 2 * c
             elif i > 0:
@@ -437,16 +434,20 @@ class SequenceEnv:
             self.attributes[c*96+old_card] -= 1
             self.attributes[c*96+new_card] += 1
 
-        # One hot encoding á borði
-        one_hot_board = np.zeros((temp_board.size, self.num_players+1))
-        one_hot_board[np.arange(temp_board.size),temp_board] = 1
-        one_hot_board = one_hot_board.flatten()
+        else:
+            temp_board = self.discs_on_board[0].copy().flatten()
+            temp_board = temp_board[temp_board != -1] # Athuga hvort þetta sé skynsamlegt. Mikilvægt að tekið sé tillit til hornanna í is Terminal
+
+            # One hot encoding á borði
+            one_hot_board = np.zeros((temp_board.size, self.num_players+1))
+            one_hot_board[np.arange(temp_board.size),temp_board] = 1
+            one_hot_board = one_hot_board.flatten()
+            
+            # Hönd
+            hond = np.zeros(50, dtype=np.uint8)
+            np.add.at(hond, self.hand[self.player-1], 1)
         
-        # Hönd
-        hond = np.zeros(50, dtype=np.uint8)
-        np.add.at(hond, self.hand[self.player-1], 1)
-        
-        self.attributes = np.concatenate((one_hot_board, hond))
+            self.attributes = np.concatenate((one_hot_board, hond))
 
         """
         # ELÍAS
@@ -500,4 +501,6 @@ class SequenceEnv:
         self.value_weights = np.zeros(self.attributes.size)
         self.policy_weights = np.random.normal(size=self.attributes.size)
         while not self.gameover:
+            old_value = self.get_value()
             self.makeMove(policy=policy, epsilon=epsilon)
+            new_value = self.get_value()
