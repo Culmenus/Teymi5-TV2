@@ -11,7 +11,8 @@ class SequenceEnv:
         self.player = 1
         self.discs_on_board = np.zeros((num_players, 10, 10), dtype='int8')  # empty!
         for i in range(num_players):
-            self.discs_on_board[i][np.ix_([0, 0, 9, 9], [0, 9, 0, 9])] = -1  # the corners are "-1"
+            # Set corners to -1
+            self.discs_on_board[i][np.ix_([0, 0, 9, 9], [0, 9, 0, 9])] = -1
         self.no_feasible_move = 0  # counts how many player in a row say pass! FINNST ÞETTA FURÐULEG BREYTA.
         # There are two decks of cards each with 48 unique cards if we remove the Jacks lets label them 0,...,47
         # Let card 48 be one-eyed Jack and card 49 be two-eyed jack; there are 4 each of these
@@ -62,6 +63,18 @@ class SequenceEnv:
         self.gameover = False
 
         self.heuristic_1_table = np.zeros((num_players, 10, 10))
+
+    def initialize_game(self):
+        self.player = 1
+        self.discs_on_board = np.zeros((self.num_players, 10, 10), dtype='int8')
+        for i in range(self.num_players):
+            # Set corners to -1
+            self.discs_on_board[i][np.ix_([0, 0, 9, 9], [0, 9, 0, 9])] = -1
+        self.deck = self.cards[np.argsort(np.random.rand(104))]
+        self.hand = []
+        for i in range(self.num_players):
+            self.hand.append(self.deck[:self.m[self.num_players]])  # deal player i m[n] cards
+            self.deck = self.deck[self.m[self.num_players]:]  # remove cards from deck
 
     # (floki@hi.is) #moddað í hlutbundið af oat
     def isTerminal(self):
