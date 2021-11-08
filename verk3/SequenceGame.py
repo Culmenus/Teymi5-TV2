@@ -8,29 +8,12 @@ class SequenceEnv:
     def __init__(self, num_players = 2):
         # some global variables used by the games, what we get in the box!
         self.num_players = num_players
-        self.player = 1
-        self.discs_on_board = np.zeros((num_players, 10, 10), dtype='int8')  # empty!
-        for i in range(num_players):
-            # Set corners to -1
-            self.discs_on_board[i][np.ix_([0, 0, 9, 9], [0, 9, 0, 9])] = -1
         self.no_feasible_move = 0  # counts how many player in a row say pass! FINNST ÞETTA FURÐULEG BREYTA.
         # There are two decks of cards each with 48 unique cards if we remove the Jacks lets label them 0,...,47
         # Let card 48 be one-eyed Jack and card 49 be two-eyed jack; there are 4 each of these
         self.cards = np.hstack((np.arange(48), np.arange(48), 48, 48, 48, 48, 49, 49, 49, 49))
-        self.deck = self.cards[np.argsort(np.random.rand(104))]  # here we shuffle the cards, note we cannot use shuffle (we have non-unique cards)
         # now lets deal out the hand, each player gets m[n] cards
         self.m = (None, None, 7, 6, 6)
-        self.hand = []
-        for i in range(num_players):
-            self.hand.append(self.deck[:self.m[num_players]])  # deal player i m[n] cards
-            self.deck = self.deck[self.m[num_players]:]  # remove cards from deck
-
-        self.attributes = []
-
-        # Some linear function approximators
-        # Can be changed to neural networks
-        self.value_weights = []
-        self.policy_weights = []
 
         self.cards_on_board = np.matrix([[-1, 0, 11, 10, 9, 8, 7, 6, 5, -1],
                                     [24, 18, 19, 20, 21, 22, 23, 12, 4, 13],
@@ -47,6 +30,14 @@ class SequenceEnv:
                      'AD', '2D', '3D', '4D', '5D', '6D', '7D', '8D', '9D', '1D', 'QD', 'KD',
                      'AH', '2H', '3H', '4H', '5H', '6H', '7H', '8H', '9H', '1H', 'QH', 'KH',
                      '1J', '1J', '1J', '1J', '2J', '2J', '2J', '2J']
+
+        self.attributes = []
+        self.heuristic_1_table = np.zeros((num_players, 10, 10))
+
+        # Some linear function approximators
+        # Can be changed to neural networks
+        self.value_weights = []
+        self.policy_weights = []
         
         # Lookup table fyrir spilin
         # Confirmed bug free
@@ -59,12 +50,9 @@ class SequenceEnv:
                     self.card_positions[self.cards_on_board[i,j]].append((i, j))
         for i in range(12):
             self.card_positions[i] = tuple(self.card_positions[i])
-        
-        self.gameover = False
-
-        self.heuristic_1_table = np.zeros((num_players, 10, 10))
 
     def initialize_game(self):
+        self.gameover = False
         self.player = 1
         self.discs_on_board = np.zeros((self.num_players, 10, 10), dtype='int8')
         for i in range(self.num_players):
@@ -75,6 +63,8 @@ class SequenceEnv:
         for i in range(self.num_players):
             self.hand.append(self.deck[:self.m[self.num_players]])  # deal player i m[n] cards
             self.deck = self.deck[self.m[self.num_players]:]  # remove cards from deck
+        
+        self.set_attributes()
 
     # (floki@hi.is) #moddað í hlutbundið af oat
     def isTerminal(self):
@@ -497,8 +487,7 @@ class SequenceEnv:
 
     #naive test
     def play_full_game(self):
-        self.gameover = False
-        self.set_attributes()
+        self.initialize_game()
         while not self.gameover:
             self.makeMove()
             print(self.discs_on_board[0])
@@ -507,8 +496,7 @@ class SequenceEnv:
             plt.show()
     
     def learn(self, policy="parametrized", epsilon=0.1):
-        self.gameover = False
-        self.set_attributes()
+        self.initialize_game()
         self.value_weights = np.zeros(self.attributes.size)
         self.policy_weights = np.random.normal(size=self.attributes.size)
         while not self.gameover:
