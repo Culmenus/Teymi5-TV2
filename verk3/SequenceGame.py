@@ -146,6 +146,7 @@ class SequenceEnv:
                 raise
             if debug:
                 print("Hand after change", self.hand)
+            return new_card
         else:
             i = np.where(player_hand == card_played)
             
@@ -158,6 +159,7 @@ class SequenceEnv:
                 raise
             if debug:    
                 print("Hand after change", self.hand)
+            return None
 
     def sample_card(self):
         # Samples a card draw
@@ -178,7 +180,7 @@ class SequenceEnv:
         self.discs_on_board[i,j] = disc
         card_index = self.hand.index(card)
         self.hand[card_index] = self.sample_card()
-        self.set_attributes(pos)
+        self.set_attributes(pos=pos, card_index=card_index)
         value = self.get_value()
 
         # Reset state
@@ -224,6 +226,7 @@ class SequenceEnv:
         len1 = len(legal_moves)
         len2 = len1 + len(legal_moves_1J)
         all_moves = np.concatenate(legal_moves, legal_moves_1J, legal_moves_2J)
+        played_card = 0
         disc = -1
         i, j = 0, 0
         if len(all_moves) > 0:
@@ -271,13 +274,11 @@ class SequenceEnv:
             self.no_feasible_move += 1
         if disc >= 0:
             self.no_feasible_move = 0
-            # now lets place or remove a disc on the board
+
+            # Update board, hand, and attributes
             self.discs_on_board[0,i,j] = disc
-            # now we need to draw a new card
-            #print("playedcard id", played_card)
-            self.drawCard(played_card)
-            # lets pretty print this new state og the game
-            #pretty_print(discs_on_board, hand)
+            new_card = self.drawCard(played_card)
+            self.set_attributes(pos=(i,j), old_card=played_card, new_card=new_card)
         if (self.no_feasible_move == self.num_players) | (len(self.deck) == 0) | (True == self.isTerminal()):
             # Bætti við að það prentar út hnitin á síðasta spili sem var spilað. Léttara að finna hvar leikmaðurinn vann.
             print("no_feasible_move = ", self.no_feasible_move, " player = ", self.player, " cards in deck = ", len(self.deck),
@@ -286,7 +287,6 @@ class SequenceEnv:
 
         current_player = self.player
         self.player = current_player % self.num_players + 1
-    # get all feasible moved for normal cards, one-eyed jacks and two-eyed jacks
 
     def heuristic_1(self, temp_board, pos):
         # Namminamm
@@ -403,7 +403,7 @@ class SequenceEnv:
                     break
                 self.heuristic_1_table[self.player-1][i-t][j] = self.heuristic_1(temp_board, i-t, j)
     
-    def set_attributes(self, pos=None):
+    def set_attributes(self, pos=None, old_card=None, new_card=None):
         temp_board = self.discs_on_board[0].copy().flatten()
         temp_board = temp_board[temp_board != -1] # Athuga hvort þetta sé skynsamlegt. Mikilvægt að tekið sé tillit til hornanna í is Terminal
 
@@ -414,17 +414,22 @@ class SequenceEnv:
             i, j = pos
 
             # Staður í eigindavigri; nauðsynlegt að taka tillit til hornanna
-            attr_pos = 4 * (10*i + j - 1)
+            c = self.num_players + 1
+            attr_pos = c * (10*i + j - 1)
             attr_pos += self.discs_on_board[0,i,j]
             if i > 8:
-                attr_pos -= 8
+                attr_pos -= 2 * c
             elif i > 0:
-                attr_pos -= 4
+                attr_pos -= c
             
             # Uppfæra þann stað
-            new_attr = np.zeros(self.num_players + 1)
+            new_attr = np.zeros(c)
             new_attr[self.discs_on_board[0][i,j]] = 1
-            self.attributes[attr_pos:attr_pos+self.num_players] = new_attr
+            self.attributes[attr_pos:attr_pos+c] = new_attr
+
+            # Uppfæra hönd
+            self.attributes[c*96+old_card] -= 1
+            self.attributes[c*96+new_card] += 1
 
         # One hot encoding á borði
         one_hot_board = np.zeros((temp_board.size, self.num_players+1))
@@ -452,7 +457,6 @@ class SequenceEnv:
         # Skeyti hönd aftan við borð, fjöldi spila á indexi. Ef sett er hand í stað hönd skeytist nr. spila við, mögulega jafngóð kóðun
         return torch.cat((one_hot, torch.tensor(hond)))
         """
-
 
     def get_value(self):
         # State-value function
@@ -484,7 +488,7 @@ class SequenceEnv:
             plt.colorbar()
             plt.show()
     
-    def learn(self, policy="epsilon_greedy", policy_v=None, epsilon=0.1):
+    def learn(self, policy="epsilon_greedy", epsilon=0.1):
         self.gameover = False
         while not self.gameover:
-            self.makeMove(policy=policy, policy_v=policy_v, epsilon=epsilon)
+            self.makeMove(policy=policy, epsilon=epsilon)
