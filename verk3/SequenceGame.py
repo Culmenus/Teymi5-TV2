@@ -185,13 +185,14 @@ class SequenceEnv:
         card_index = self.hand.index(card)
         self.hand[card_index] = self.sample_card()
         self.set_attributes(pos=pos, card_index=card_index)
+        policy = np.dot(self.attributes, self.policy_weights)
         value = self.get_value()
 
         # Reset state
         self.hand = old_hand
         self.discs_on_board[i,j] = old_disc
         self.attributes = old_attributes
-        return value
+        return policy, value
 
     def getMoves(self, debug=False):
         #-------------------
@@ -246,19 +247,26 @@ class SequenceEnv:
                 k = np.random.choice(np.arange(len(all_moves)), 1)
             else:
                 # Find afterstate values
+                policy_estimates = []
                 values = []
                 for i in range(len(legal_moves)):
-                    values.append(self.lookahead(legal_moves[i], self.cards_on_board[legal_moves[i]], self.player))
+                    pol, val = self.lookahead(legal_moves[i], self.cards_on_board[legal_moves[i]], self.player)
+                    policy_estimates.append(pol)
+                    values.append(val)
                 for i in range(len(legal_moves_1J)):
-                    values.append(self.lookahead(legal_moves_1J[i], 48, 0))
+                    pol, val = self.lookahead(legal_moves_1J[i], 48, 0)
+                    policy_estimates.append(pol)
+                    values.append(val)
                 for i in range(len(legal_moves_2J)):
-                    values.append(self.lookahead(legal_moves_2J[i], 49, self.player))
-                values = np.array(values)
+                    pol, val = self.lookahead(legal_moves_2J[i], 49, self.player)
+                    policy_estimates.append(pol)
+                    values.append(val)
+                policy_estimates = np.array(policy_estimates)
                 if policy == "epsilon_greedy":
-                    k = np.argmax(values)
+                    k = np.argmax(policy_estimates)
                 elif policy == "parametrized":
                     # Linear softmax policy
-                    exp = np.exp(values)
+                    exp = np.exp(policy_estimates)
                     probabilities = exp / np.sum(exp)
                     k = np.random.choice(np.arange(len(probabilities)), p=probabilities)
             i, j = all_moves[k][0] # The [0] is there to unpack a nested list [[i, j]]
