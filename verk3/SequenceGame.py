@@ -23,7 +23,12 @@ class SequenceEnv:
             self.hand.append(self.deck[:self.m[num_players]])  # deal player i m[n] cards
             self.deck = self.deck[self.m[num_players]:]  # remove cards from deck
 
-        self.attributes = np.array()
+        self.attributes = []
+
+        # Some linear function approximators
+        # Can be changed to neural networks
+        self.value_weights = []
+        self.policy_weights = []
 
         self.cards_on_board = np.matrix([[-1, 0, 11, 10, 9, 8, 7, 6, 5, -1],
                                     [24, 18, 19, 20, 21, 22, 23, 12, 4, 13],
@@ -42,8 +47,9 @@ class SequenceEnv:
                      '1J', '1J', '1J', '1J', '2J', '2J', '2J', '2J']
         
         # Lookup table fyrir spilin
+        # Confirmed bug free
         self.card_positions = {}
-        for i in range(12):
+        for i in range(48):
             self.card_positions[i] = []
         for i in range(10):
             for j in range(10):
@@ -54,8 +60,7 @@ class SequenceEnv:
         
         self.gameover = False
 
-        self.heuristic_1_table = np.zeros(num_players, 10, 10)
-
+        self.heuristic_1_table = np.zeros((num_players, 10, 10))
 
     # (floki@hi.is) #moddað í hlutbundið af oat
     def isTerminal(self):
@@ -196,10 +201,32 @@ class SequenceEnv:
             randomMove = False
             if policy == "parametrized":
                 # Assuming linear softmax from parameter vector
-                # exp = np.exp(self.attributes)
-                # propabilities = exp / np.sum(exp)
-                # softmax = np.random.choice()
-                pass # TODO: Calculate softmax
+                # 3*96 = 288: 96 ways to play normal cards, 96 for each type of jack
+                moves = []
+                for i in range(self.hand.size):
+                    if self.hand[i] == 48:
+                        for j in range(10):
+                            for k in range(10):
+                                if self.cards_on_board[j,k] > 0:
+                                    new_move = np.zeros(288)
+                                    new_move[10*j+k] = 1
+                                    moves.append(new_move)
+                    elif self.hand[i] == 49:
+                        for j in range(10):
+                            for k in range(10):
+                                if self.cards_on_board[j,k] == 0:
+                                    new_move = np.zeros(288)
+                                    new_move[10*j+k] = 1
+                                    moves.append(new_move)
+                    else:
+                        new_move = np.zeros(288)
+                        new_move[self.hand[i]*2] = 1
+                        moves.append(new_move)
+
+                        new_move = np.zeros(288)
+                        new_move[self.hand[i]*2+1] = 1
+                        moves.append(new_move)
+                # TODO: Calculate softmax
             elif policy == "epsilon_greedy":
                 cmp = np.random.rand()
                 if cmp < epsilon:
