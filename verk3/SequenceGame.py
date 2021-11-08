@@ -127,7 +127,6 @@ class SequenceEnv:
         return False
 
     # (tpr@hi.is)
-
     def drawCard(self, card_played, debug=False):
         player_hand = self.hand[self.player-1]
         # remove card player from hand
@@ -160,16 +159,47 @@ class SequenceEnv:
             if debug:    
                 print("Hand after change", self.hand)
 
+    def sample_card(self):
+        # Samples a card draw
+        # Adds some noise to the afterstate calculations,
+        # but can utilize card counting
+        return np.random.choice(self.deck)
+
+    def lookahead(self, pos, card, disc):
+        # One-step lookahead; finds afterstate value
+        i, j = pos
+
+        # Cache current state
+        old_disc = self.discs_on_board[i,j]
+        old_hand = self.hand.copy()
+        old_attributes = self.attributes.copy()
+
+        # Update state and find value
+        self.discs_on_board[i,j] = disc
+        card_index = self.hand.index(card)
+        self.hand[card_index] = self.sample_card()
+        self.set_attributes(pos)
+        value = self.get_value()
+
+        # Reset state
+        self.hand = old_hand
+        self.discs_on_board[i,j] = old_disc
+        self.attributes = old_attributes
+        return value
+
     def getMoves(self, card, debug=False):
+        #-------------------
+        # Hvað er þetta? Virðist vera óþarfi
         if card == 48:
             pass
         if card == 49:
             pass
+        #-------------------
         else:
             legal_moves = self.card_positions[card]
         # legal moves for normal playing cards
         iH = np.in1d(self.cards_on_board, self.hand[self.player - 1]).reshape(10, 10)  # check for cards in hand
-        iA = (self.discs_on_board[0] == 0)  # there is no disc blocking
+        iA = (self.discs_on_board[0] == 0) # there is no disc blocking
         legal_moves = np.argwhere(iH & iA)
         # legal moves for one-eyed Jacks (they remove)
         if 48 in self.hand[self.player - 1]:
@@ -187,73 +217,60 @@ class SequenceEnv:
                 print(self.the_cards[self.cards_on_board[i, j]], end=" ")
             print("")
         return legal_moves, legal_moves_1J, legal_moves_2J
-
-
-    def makeMove(self, policy, policy_v, epsilon):
-      # Þetta þarf að bæta, taka inn stefnu og spila eftir henni
+    
+    def makeMove(self, policy, epsilon):
+        # Þetta þarf að bæta, taka inn stefnu og spila eftir henni
         legal_moves, legal_moves_1J, legal_moves_2J = self.getMoves()
         len1 = len(legal_moves)
         len2 = len1 + len(legal_moves_1J)
-        legal_moves = np.concatenate(legal_moves, legal_moves_1J, legal_moves_2J)
-        if len(legal_moves) > 0:
-            # this is how we would perform a random move using the normal cards:
+        all_moves = np.concatenate(legal_moves, legal_moves_1J, legal_moves_2J)
+        disc = -1
+        i, j = 0, 0
+        if len(all_moves) > 0:
             k = 0
             randomMove = False
-            if policy == "parametrized":
-                # Assuming linear softmax from parameter vector
-                # 3*96 = 288: 96 ways to play normal cards, 96 for each type of jack
-                moves = []
-                for i in range(self.hand.size):
-                    if self.hand[i] == 48:
-                        for j in range(10):
-                            for k in range(10):
-                                if self.cards_on_board[j,k] > 0:
-                                    new_move = np.zeros(288)
-                                    new_move[10*j+k] = 1
-                                    moves.append(new_move)
-                    elif self.hand[i] == 49:
-                        for j in range(10):
-                            for k in range(10):
-                                if self.cards_on_board[j,k] == 0:
-                                    new_move = np.zeros(288)
-                                    new_move[10*j+k] = 1
-                                    moves.append(new_move)
-                    else:
-                        new_move = np.zeros(288)
-                        new_move[self.hand[i]*2] = 1
-                        moves.append(new_move)
-
-                        new_move = np.zeros(288)
-                        new_move[self.hand[i]*2+1] = 1
-                        moves.append(new_move)
-                # TODO: Calculate softmax
-            elif policy == "epsilon_greedy":
+            if policy == "epsilon_greedy":
                 cmp = np.random.rand()
                 if cmp < epsilon:
                     randomMove = True
                 else:
                     pass # TODO: Find afterstate values
             if policy == "random" or randomMove:
-                k = np.random.choice(range(len(legal_moves)), 1)
-            (i, j) = tuple(legal_moves[k][0])
-            # print("card played is %d or %s" % (cards_on_board[i,j], the_cards[cards_on_board[i,j]]))
-            disc = self.player
-            played_card = self.cards_on_board[i, j]
-            # print("makeMove played_card ", played_card)
-        elif len(legal_moves_1J) > 0:
-            k = np.random.choice(range(len(legal_moves_1J)), 1)
-            disc = 0  # remove disc!
-            played_card = 48
-        elif len(legal_moves_2J) > 0:
-            k = np.random.choice(range(len(legal_moves_2J)), 1)
-            disc = self.player
-            played_card = 49
+                k = np.random.choice(range(len(all_moves)), 1)
+            else:
+                # Find afterstate values
+                values = []
+                for i in range(len(legal_moves)):
+                    values.append(self.lookahead(legal_moves[i], self.cards_on_board[legal_moves[i]], self.player))
+                for i in range(len(legal_moves_1J)):
+                    values.append(self.lookahead(legal_moves_1J[i], 48, 0))
+                for i in range(len(legal_moves_2J)):
+                    values.append(self.lookahead(legal_moves_2J[i], 49, self.player))
+                values = np.array(values)
+                if policy == "epsilon_greedy":
+                    k = np.argmax(values)
+                elif policy == "parametrized":
+                    # Linear softmax policy
+                    exp = np.exp(values)
+                    probabilities = exp / np.sum(exp)
+                    k = np.random.choice(np.arange(len(probabilities)), p=probabilities)
+            i, j = all_moves[k]
+            if k < len1 or k >= len2:
+                disc = self.player
+            else:
+                disc = 0
+            if k < len1:
+                played_card = self.cards_on_board[i,j]
+            elif k < len2:
+                played_card = 48
+            else:
+                played_card = 49
         else:
             print("Don't have a legal move for player (can this really happen?): ", self.player)
             disc = -1
             self.no_feasible_move += 1
         if disc >= 0:
-            no_feasible_move = 0
+            self.no_feasible_move = 0
             # now lets place or remove a disc on the board
             self.discs_on_board[0,i,j] = disc
             # now we need to draw a new card
@@ -435,6 +452,12 @@ class SequenceEnv:
         # Skeyti hönd aftan við borð, fjöldi spila á indexi. Ef sett er hand í stað hönd skeytist nr. spila við, mögulega jafngóð kóðun
         return torch.cat((one_hot, torch.tensor(hond)))
         """
+
+
+    def get_value(self):
+        # State-value function
+        # Currently linear, can be changed to a neural network
+        return np.dot(self.attributes, self.value_weights)
 
     # printing the board is useful for debugging code...
     def pretty_print(self):
