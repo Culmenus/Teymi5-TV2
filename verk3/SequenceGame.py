@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from numpy import random
+from numpy.core.fromnumeric import size
 
 class SequenceEnv:
 
@@ -189,30 +190,30 @@ class SequenceEnv:
         self.attributes = old_attributes
         return value
 
-    def getMoves(self, card, debug=False):
+    def getMoves(self, debug=False):
         #-------------------
         # Hvað er þetta? Virðist vera óþarfi
-        if card == 48:
-            pass
-        if card == 49:
-            pass
+        # if card == 48:
+        #     pass
+        # if card == 49:
+        #     pass
+        # else:
+        #     legal_moves = self.card_positions[card]
         #-------------------
-        else:
-            legal_moves = self.card_positions[card]
         # legal moves for normal playing cards
         iH = np.in1d(self.cards_on_board, self.hand[self.player - 1]).reshape(10, 10)  # check for cards in hand
         iA = (self.discs_on_board[0] == 0) # there is no disc blocking
         legal_moves = np.argwhere(iH & iA)
         # legal moves for one-eyed Jacks (they remove)
-        if 48 in self.hand[self.player - 1]:
+        if 48 in self.hand[self.player-1]:
             legal_moves_1J = np.argwhere((self.discs_on_board[0] != -1) & (self.discs_on_board[0] != 0) & (self.discs_on_board[0] != self.player))
         else:
-            legal_moves_1J = np.array([])
+            legal_moves_1J = np.array([]).reshape(0, 2)
         # legal moves for two-eyed Jacks (they are wild)
-        if 49 in self.hand[self.player - 1]:
+        if 49 in self.hand[self.player-1]:
             legal_moves_2J = np.argwhere(self.discs_on_board[0] == 0)
         else:
-            legal_moves_2J = np.array([])
+            legal_moves_2J = np.array([]).reshape(0, 2)
         if debug:
             print("legal_moves for player ", self.player)
             for i, j in legal_moves:
@@ -220,12 +221,12 @@ class SequenceEnv:
             print("")
         return legal_moves, legal_moves_1J, legal_moves_2J
     
-    def makeMove(self, policy, epsilon):
+    def makeMove(self, policy="random", epsilon=0.1):
         # Þetta þarf að bæta, taka inn stefnu og spila eftir henni
         legal_moves, legal_moves_1J, legal_moves_2J = self.getMoves()
         len1 = len(legal_moves)
         len2 = len1 + len(legal_moves_1J)
-        all_moves = np.concatenate(legal_moves, legal_moves_1J, legal_moves_2J)
+        all_moves = np.concatenate((legal_moves, legal_moves_1J, legal_moves_2J)).astype(np.int8)
         played_card = 0
         disc = -1
         i, j = 0, 0
@@ -239,7 +240,7 @@ class SequenceEnv:
                 else:
                     pass # TODO: Find afterstate values
             if policy == "random" or randomMove:
-                k = np.random.choice(range(len(all_moves)), 1)
+                k = np.random.choice(np.arange(len(all_moves)), 1)
             else:
                 # Find afterstate values
                 values = []
@@ -257,7 +258,7 @@ class SequenceEnv:
                     exp = np.exp(values)
                     probabilities = exp / np.sum(exp)
                     k = np.random.choice(np.arange(len(probabilities)), p=probabilities)
-            i, j = all_moves[k]
+            i, j = all_moves[k][0] # The [0] is there to unpack a nested list [[i, j]]
             if k < len1 or k >= len2:
                 disc = self.player
             else:
@@ -402,6 +403,8 @@ class SequenceEnv:
                 if temp_board[i-t][j] != 0 and temp_board[i-t][j] != p:
                     break
                 self.heuristic_1_table[self.player-1][i-t][j] = self.heuristic_1(temp_board, i-t, j)
+        
+        # TODO: Vertical & diagonal
     
     def set_attributes(self, pos=None, old_card=None, new_card=None):
         temp_board = self.discs_on_board[0].copy().flatten()
@@ -438,9 +441,9 @@ class SequenceEnv:
         
         # Hönd
         hond = np.zeros(50, dtype=np.uint8)
-        np.add.at(hond, self.hand, 1)
+        np.add.at(hond, self.hand[self.player-1], 1)
         
-        self.attributes = np.concatenate(one_hot_board, hond)
+        self.attributes = np.concatenate((one_hot_board, hond))
 
         """
         # ELÍAS
@@ -481,6 +484,8 @@ class SequenceEnv:
 
     #naive test
     def play_full_game(self):
+        self.gameover = False
+        self.set_attributes()
         while not self.gameover:
             self.makeMove()
             print(self.discs_on_board[0])
@@ -488,7 +493,10 @@ class SequenceEnv:
             plt.colorbar()
             plt.show()
     
-    def learn(self, policy="epsilon_greedy", epsilon=0.1):
+    def learn(self, policy="parametrized", epsilon=0.1):
         self.gameover = False
+        self.set_attributes()
+        self.value_weights = np.zeros(self.attributes.size)
+        self.policy_weights = np.random.normal(size=self.attributes.size)
         while not self.gameover:
             self.makeMove(policy=policy, epsilon=epsilon)
