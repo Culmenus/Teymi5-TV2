@@ -280,10 +280,10 @@ class SequenceEnv:
             self.no_feasible_move = 0
 
             # Update board, hand, and attributes
-            self.discs_on_board[0,i,j] = disc
+            self.discs_on_board[0][i,j] = disc
             new_card = self.drawCard(played_card)
             self.set_attributes(pos=(i,j), old_card=played_card, new_card=new_card)
-        if (self.no_feasible_move == self.num_players) | (len(self.deck) == 0) | (True == self.isTerminal()):
+        if self.no_feasible_move == self.num_players or self.isTerminal():
             # Bætti við að það prentar út hnitin á síðasta spili sem var spilað. Léttara að finna hvar leikmaðurinn vann.
             print("no_feasible_move = ", self.no_feasible_move, " player = ", self.player, " cards in deck = ", len(self.deck),
                   " last played card at coords: (", i, j, ")")
@@ -426,10 +426,14 @@ class SequenceEnv:
             elif i > 0:
                 attr_pos -= n
 
+            pl = p
             for k in range(self.num_players):
+                pl += 1
+                if pl == n:
+                    pl = 1
                 # Uppfæra þann stað
                 new_attr = np.zeros(n)
-                new_attr[self.discs_on_board[p][i,j]] = 1
+                new_attr[self.discs_on_board[pl][i,j]] = 1
                 self.attributes[k][attr_pos:attr_pos+n] = new_attr
 
             # Uppfæra hönd
