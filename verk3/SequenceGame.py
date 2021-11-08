@@ -410,6 +410,9 @@ class SequenceEnv:
         # TODO: Vertical & diagonal
     
     def set_attributes(self, pos=None, old_card=None, new_card=None):
+        p = self.player - 1
+        n = self.num_players + 1
+
         if pos is not None:
             # Uppfæra eftir leik; forðast óþarfa útreikninga
             # Mjög „optimised“; ekki þægilegt að vinna með
@@ -417,37 +420,43 @@ class SequenceEnv:
             i, j = pos
 
             # Staður í eigindavigri; nauðsynlegt að taka tillit til hornanna
-            c = self.num_players + 1
-            attr_pos = c * (10*i + j - 1)
-            attr_pos += self.discs_on_board[0][i,j]
+            attr_pos = n * (10*i + j - 1)
             if i > 8:
-                attr_pos -= 2 * c
+                attr_pos -= 2 * n
             elif i > 0:
-                attr_pos -= c
-            
-            # Uppfæra þann stað
-            new_attr = np.zeros(c)
-            new_attr[self.discs_on_board[0][i,j]] = 1
-            self.attributes[attr_pos:attr_pos+c] = new_attr
+                attr_pos -= n
+
+            for k in range(self.num_players):
+                # Uppfæra þann stað
+                new_attr = np.zeros(n)
+                new_attr[self.discs_on_board[p][i,j]] = 1
+                self.attributes[k][attr_pos:attr_pos+n] = new_attr
 
             # Uppfæra hönd
-            self.attributes[c*96+old_card] -= 1
-            self.attributes[c*96+new_card] += 1
+            self.attributes[p][n*96+old_card] -= 1
+            self.attributes[p][n*96+new_card] += 1
 
         else:
             temp_board = self.discs_on_board[0].copy().flatten()
             temp_board = temp_board[temp_board != -1] # Athuga hvort þetta sé skynsamlegt. Mikilvægt að tekið sé tillit til hornanna í is Terminal
 
-            # One hot encoding á borði
-            one_hot_board = np.zeros((temp_board.size, self.num_players+1))
-            one_hot_board[np.arange(temp_board.size),temp_board] = 1
-            one_hot_board = one_hot_board.flatten()
+            attributes = []
+            for i in range(self.num_players):
+                # One hot encoding á borði
+                one_hot_board = np.zeros((temp_board.size, n))
+                one_hot_board[np.arange(temp_board.size),temp_board] = 1
+                one_hot_board = one_hot_board.flatten()
             
-            # Hönd
-            hond = np.zeros(50, dtype=np.uint8)
-            np.add.at(hond, self.hand[self.player-1], 1)
+                # Hönd
+                hond = np.zeros(50, dtype=np.uint8)
+                np.add.at(hond, self.hand[i], 1)
+                attributes.append(np.concatenate((one_hot_board, hond)))
+
+                # Sjónarhorn næsta leikmanns
+                temp_board[temp_board != 0] += 1
+                temp_board[temp_board == n] = 1
         
-            self.attributes = np.concatenate((one_hot_board, hond))
+            self.attributes = np.array(attributes)
 
         """
         # ELÍAS
