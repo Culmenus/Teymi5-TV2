@@ -169,6 +169,7 @@ class SequenceEnv:
         # Samples a card draw
         # Adds some noise to the afterstate calculations,
         # but can utilize card counting
+        # TODO: Laga
         return np.random.choice(self.deck)
 
     def lookahead(self, pos, card, disc):
