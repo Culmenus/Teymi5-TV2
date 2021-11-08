@@ -16,7 +16,7 @@ class SequenceEnv:
         self.no_feasible_move = 0  # counts how many player in a row say pass! FINNST ÞETTA FURÐULEG BREYTA.
         # There are two decks of cards each with 48 unique cards if we remove the Jacks lets label them 0,...,47
         # Let card 48 be one-eyed Jack and card 49 be two-eyed jack; there are 4 each of these
-        self.cards = np.hstack((np.arange(48), np.arange(48), 48, 48, 48, 48, 49, 49, 49, 49))
+        self.cards = tuple(np.hstack((np.arange(48), np.arange(48), 48, 48, 48, 48, 49, 49, 49, 49)))
         self.deck = self.cards[np.argsort(np.random.rand(104))]  # here we shuffle the cards, note we cannot use shuffle (we have non-unique cards)
         # now lets deal out the hand, each player gets m[n] cards
         self.m = (None, None, 7, 6, 6)
