@@ -184,7 +184,7 @@ class SequenceEnv:
         return legal_moves, legal_moves_1J, legal_moves_2J
 
 
-    def makeMove(self, policy, epsilon):
+    def makeMove(self, policy, policy_v, epsilon):
       # Þetta þarf að bæta, taka inn stefnu og spila eftir henni
         legal_moves, legal_moves_1J, legal_moves_2J = self.getMoves()
         len1 = len(legal_moves)
@@ -194,7 +194,13 @@ class SequenceEnv:
             # this is how we would perform a random move using the normal cards:
             k = 0
             randomMove = False
-            if policy == "epsilon_greedy":
+            if policy == "parametrized":
+                # Assuming linear softmax from parameter vector
+                # exp = np.exp(self.attributes)
+                # propabilities = exp / np.sum(exp)
+                # softmax = np.random.choice()
+                pass # TODO: Calculate softmax
+            elif policy == "epsilon_greedy":
                 cmp = np.random.rand()
                 if cmp < epsilon:
                     randomMove = True
@@ -428,7 +434,7 @@ class SequenceEnv:
             plt.colorbar()
             plt.show()
     
-    def learn(self, policy="epsilon_greedy", epsilon=0.1):
+    def learn(self, policy="epsilon_greedy", policy_v=None, epsilon=0.1):
         self.gameover = False
         while not self.gameover:
-            self.makeMove(policy=policy, epsilon=epsilon)
+            self.makeMove(policy=policy, policy_v=policy_v, epsilon=epsilon)
