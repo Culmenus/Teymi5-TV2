@@ -246,7 +246,7 @@ class SequenceEnv:
                     pass # TODO: Find afterstate values
             if policy == "random" or randomMove:
                 k = np.random.choice(np.arange(len(all_moves)), 1)
-            else:
+            elif policy == "parametrized":
                 # Find afterstate values
                 policy_estimates = []
                 values = []
