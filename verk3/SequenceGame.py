@@ -54,10 +54,9 @@ class SequenceEnv:
     def initialize_game(self):
         self.gameover = False
         self.player = 1
-        self.discs_on_board = np.zeros((self.num_players, 10, 10), dtype='int8')
-        for i in range(self.num_players):
-            # Set corners to -1
-            self.discs_on_board[i][np.ix_([0, 0, 9, 9], [0, 9, 0, 9])] = -1
+        self.discs_on_board = np.zeros((10, 10), dtype='int8')
+        self.sequences = [0]*self.num_players
+        self.discs_on_board[np.ix_([0, 0, 9, 9], [0, 9, 0, 9])] = -1
         self.deck = self.cards[np.argsort(np.random.rand(104))]
         self.hand = []
         for i in range(self.num_players):
@@ -65,6 +64,70 @@ class SequenceEnv:
             self.deck = self.deck[self.m[self.num_players]:]  # remove cards from deck
         
         self.set_attributes()
+
+    # Function to check if the "reitur" where the one eyed jack is being played is a part of 5 in a row
+    # If yes the return true ("not allowed")
+    # Else return false ("allowed")
+    # Takes in where the jack is being played ,
+    # state of the board (disc on board),
+    # which player is playing it and nr of players (n).
+    def fiveInRow(self, row, col):
+        tempWin = [[1, 1, 1, 1, 1, 0, 0, 0, 0, 0],
+                [0, 1, 1, 1, 1, 1, 0, 0, 0, 0],
+                [0, 0, 1, 1, 1, 1, 1, 0, 0, 0],
+                [0, 0, 0, 1, 1, 1, 1, 1, 0, 0],
+                [0, 0, 0, 0, 1, 1, 1, 1, 1, 0],
+                [0, 0, 0, 0, 0, 1, 1, 1, 1, 1]]
+        other_player = self.player % self.num_players + 1
+        players_discs = self.discs_on_board.copy()
+        players_discs[players_discs == -1] = other_player
+        players_discs = players_discs == other_player
+
+        rows = list(players_discs[row])
+        cols = [i[col] for i in players_discs]
+        # Make the diagonal lines
+        temp_bdiag = []
+        temp_fdiag = []
+        temp_fdiag2 = []
+        temp_bdiag2 = []
+        for i in range(0, len(players_discs[0])):
+            if col - i >= 0 and row - i >= 0:
+                temp_fdiag2.append(players_discs[row - i][col - i])
+            if col + i < 10 and row + i < 10:
+                temp_fdiag.append(players_discs[row + i][col + i])
+            if col + i < 10 and row - i >= 0:
+                temp_bdiag2.append(players_discs[row - i][col + i])
+            if col - i >= 0 and row + i < 10:
+                temp_bdiag.append(players_discs[row + i][col - i])
+        temp_fdiag2.reverse()
+        temp_bdiag2.reverse()
+        if len(temp_fdiag) > 1:
+            if len(temp_fdiag2) > 0:
+                temp_fdiag2 = temp_fdiag2 + temp_fdiag[1:]
+            else:
+                temp_fdiag2 = temp_fdiag
+
+        if len(temp_bdiag) > 1:
+            if len(temp_bdiag2) > 0:
+                temp_bdiag2 = temp_bdiag2 + temp_bdiag[1:]
+            else:
+                temp_bdiag2 = temp_bdiag
+        # Fill them up if shorter than 10
+        if len(temp_bdiag2) < 10:
+            temp_bdiag2 = temp_bdiag2 + ([False]*(10 - len(temp_bdiag2)))
+        if len(temp_fdiag2) < 10:
+            temp_fdiag2 = temp_fdiag2 + ([False]*(10 - len(temp_fdiag2)))
+
+        lists = list(filter(lambda discs: np.sum(discs) >= 5,
+                    [cols, rows, temp_fdiag2, temp_bdiag2]))
+        for i in lists:
+            for j in tempWin:
+                # check if 5 in row and if the correct "reitur" is also being checked
+                if sum(np.multiply(i, j)) >= 5 and j[col] == 1:
+                    # Oh no this is not allowed
+                    return True
+        # Yay lets go
+        return False
 
     # (floki@hi.is) #moddað í hlutbundið af oat
     def isTerminal(self):
@@ -77,7 +140,7 @@ class SequenceEnv:
         extraWin = [[0,1,1,1,1,1,1,1,1,1],
                     [1,1,1,1,1,1,1,1,1,0],
                     [1,1,1,1,1,1,1,1,1,1]]
-        temp_board = self.discs_on_board[0].copy()
+        temp_board = self.discs_on_board.copy()
         temp_board[temp_board == -1] = self.player
         test = temp_board == self.player
         # test[row][col] = 1
@@ -129,94 +192,136 @@ class SequenceEnv:
                     else:
                         return True          
         return False
+    
+    def isTerminal2(self, pos):
+        i, j = pos
+        p = self.player - 1
+
+        temp_board = self.discs_on_board.copy()
+        temp_board[0,0], temp_board[0,9], temp_board[9,0], temp_board[9,9] = [self.player]*4
+        
+        lengths = []
+        # Horizontal
+        t = 1
+        while j + t < 10 and temp_board[i,j+t] == self.player:
+            t += 1
+        lengths.append(t - 1)
+        t = 1
+        while j - t > 0 and temp_board[i,j-t] == self.player:
+            t += 1
+        lengths.append(t - 1)
+
+        # Vertical
+        t = 1
+        while i + t < 10 and temp_board[i+t,j] == self.player:
+            t += 1
+        lengths.append(t - 1)
+        t = 1
+        while i - t > 0 and temp_board[i-t,j] == self.player:
+            t += 1
+        lengths.append(t - 1)
+
+        # Main diagonal
+        t = 1
+        while i + t < 10 and j + t < 10 and temp_board[i+t,j+t] == self.player:
+            t += 1
+        lengths.append(t - 1)
+        t = 1
+        while i - t > 0 and j - t > 0 and temp_board[i-t,j-t] == self.player:
+            t += 1
+        lengths.append(t - 1)
+
+        # Antidiagonal
+        t = 1
+        while i + t < 10 and j - t > 0 and temp_board[i+t,j-t] == self.player:
+            t += 1
+        lengths.append(t - 1)
+        t = 1
+        while i - t > 0 and j + t < 10 and temp_board[i-t,j+t] == self.player:
+            t += 1
+        lengths.append(t - 1)
+
+        for k in range(4):
+            if lengths[2*k] + lengths[2*k+1] >= 8:
+                return True
+
+        for k in range(4):
+            if (lengths[2*k] + lengths[2*k+1] >= 4) and not (lengths[2*k] >= 5 or lengths[2*k+1] >= 5):
+                self.sequences[p] += 1
+
+        if self.num_players == 2:
+            return self.sequences[p] > 1
+        else:
+            return self.sequences[p] > 0
 
     # (tpr@hi.is)
     def drawCard(self, card_played, debug=False):
         player_hand = self.hand[self.player-1]
-        # remove card player from hand
+        # remove card played from hand
         if len(self.deck) > 0:
             new_card = self.deck[0]  # take top card from the deck
             self.deck = self.deck[1:]  # remove the card from the deck
-            #print("drawCard played card",card_played)  
-            #print("playerhand",player_hand)
-            i = np.where(player_hand == card_played)  # find location of card played in hand
-            #print(i)
-            if debug:
-                print("Hand before change", self.hand)
-            if len(i) > 0:
-                self.hand[self.player-1][i[0][0]] = new_card  # replace the card played with a new one
-            else:
-                print("drawCard, could not find this cards in the current hand?!")
-                raise
-            if debug:
-                print("Hand after change", self.hand)
-            return new_card
         else:
-            i = np.where(player_hand == card_played)
-            
-            if debug:
-                print("Hand before change", self.hand)
-            if len(i) > 0:
-                self.hand = np.delete(self.hand[self.player-1], i[0][0])
-            else:
-                print("drawCard, could not find this cards in the current hand?!")
-                raise
-            if debug:    
-                print("Hand after change", self.hand)
-            return None
+            new_card = -1  # A nonexistent card; represented as an empty slot
+        i = np.where(player_hand == card_played)  # find location of card played in hand
+        if debug:
+            print("Hand before change", self.hand)
+        if len(i) > 0:
+            self.hand[self.player-1][i[0][0]] = new_card  # replace the card played with a new one
+        else:
+            print("drawCard, could not find this cards in the current hand?!")
+            raise
+        if debug:
+            print("Hand after change", self.hand)
+        return new_card
 
     def sample_card(self):
         # Samples a card draw
         # Adds some noise to the afterstate calculations,
         # but can utilize card counting
         # TODO: Laga
-        return np.random.choice(self.deck)
+        if self.deck.size == 0:
+            return -1
+        else:
+            return np.random.choice(self.deck)
 
     def lookahead(self, pos, card, disc):
         # One-step lookahead; finds afterstate value
+        p = self.player - 1
         i, j = pos
 
         # Cache current state
         old_disc = self.discs_on_board[i,j]
-        old_hand = self.hand.copy()
+        old_hand = self.hand[p].copy()
         old_attributes = self.attributes.copy()
 
         # Update state and find value
         self.discs_on_board[i,j] = disc
-        card_index = self.hand.index(card)
-        self.hand[card_index] = self.sample_card()
-        self.set_attributes(pos=pos, card_index=card_index)
-        policy = np.dot(self.attributes, self.policy_weights)
-        value = self.get_value()
+        card_index = np.where(self.hand[p] == card)[0][0]
+        self.hand[p][card_index] = self.sample_card()
+        self.set_attributes(pos=pos, old_card=card, new_card=self.hand[p][card_index])
+        policy = np.dot(self.attributes[p], self.policy_weights)
+        value = self.get_value(p)
 
         # Reset state
-        self.hand = old_hand
+        self.hand[p] = old_hand
         self.discs_on_board[i,j] = old_disc
         self.attributes = old_attributes
         return policy, value
 
     def getMoves(self, debug=False):
-        #-------------------
-        # Hvað er þetta? Virðist vera óþarfi
-        # if card == 48:
-        #     pass
-        # if card == 49:
-        #     pass
-        # else:
-        #     legal_moves = self.card_positions[card]
-        #-------------------
         # legal moves for normal playing cards
         iH = np.in1d(self.cards_on_board, self.hand[self.player - 1]).reshape(10, 10)  # check for cards in hand
-        iA = (self.discs_on_board[0] == 0) # there is no disc blocking
+        iA = (self.discs_on_board == 0) # there is no disc blocking
         legal_moves = np.argwhere(iH & iA)
         # legal moves for one-eyed Jacks (they remove)
         if 48 in self.hand[self.player-1]:
-            legal_moves_1J = np.argwhere((self.discs_on_board[0] != -1) & (self.discs_on_board[0] != 0) & (self.discs_on_board[0] != self.player))
+            legal_moves_1J = np.argwhere((self.discs_on_board != -1) & (self.discs_on_board != 0) & (self.discs_on_board != self.player))
         else:
             legal_moves_1J = np.array([]).reshape(0, 2)
         # legal moves for two-eyed Jacks (they are wild)
         if 49 in self.hand[self.player-1]:
-            legal_moves_2J = np.argwhere(self.discs_on_board[0] == 0)
+            legal_moves_2J = np.argwhere(self.discs_on_board == 0)
         else:
             legal_moves_2J = np.array([]).reshape(0, 2)
         if debug:
@@ -226,7 +331,7 @@ class SequenceEnv:
             print("")
         return legal_moves, legal_moves_1J, legal_moves_2J
     
-    def makeMove(self, policy="random", epsilon=0.1):
+    def makeMove(self, policy="random", epsilon=0.1, debug=False):
         # Þetta þarf að bæta, taka inn stefnu og spila eftir henni
         legal_moves, legal_moves_1J, legal_moves_2J = self.getMoves()
         len1 = len(legal_moves)
@@ -251,7 +356,8 @@ class SequenceEnv:
                 policy_estimates = []
                 values = []
                 for i in range(len(legal_moves)):
-                    pol, val = self.lookahead(legal_moves[i], self.cards_on_board[legal_moves[i]], self.player)
+                    x, y = legal_moves[i]
+                    pol, val = self.lookahead(legal_moves[i], self.cards_on_board[x,y], self.player)
                     policy_estimates.append(pol)
                     values.append(val)
                 for i in range(len(legal_moves_1J)):
@@ -270,7 +376,7 @@ class SequenceEnv:
                     exp = np.exp(policy_estimates)
                     probabilities = exp / np.sum(exp)
                     k = np.random.choice(np.arange(len(probabilities)), p=probabilities)
-            i, j = all_moves[k][0] # The [0] is there to unpack a nested list [[i, j]]
+            i, j = all_moves[k]
             if k < len1 or k >= len2:
                 disc = self.player
             else:
@@ -282,20 +388,20 @@ class SequenceEnv:
             else:
                 played_card = 49
         else:
-            print("Don't have a legal move for player (can this really happen?): ", self.player)
             disc = -1
             self.no_feasible_move += 1
         if disc >= 0:
             self.no_feasible_move = 0
 
             # Update board, hand, and attributes
-            self.discs_on_board[0][i,j] = disc
+            self.discs_on_board[i,j] = disc
             new_card = self.drawCard(played_card)
             self.set_attributes(pos=(i,j), old_card=played_card, new_card=new_card)
-        if self.no_feasible_move == self.num_players or self.isTerminal():
-            # Bætti við að það prentar út hnitin á síðasta spili sem var spilað. Léttara að finna hvar leikmaðurinn vann.
-            print("no_feasible_move = ", self.no_feasible_move, " player = ", self.player, " cards in deck = ", len(self.deck),
-                  " last played card at coords: (", i, j, ")")
+        if self.no_feasible_move == self.num_players or self.isTerminal2(pos=(i,j)):
+            if debug:
+                # Bætti við að það prentar út hnitin á síðasta spili sem var spilað. Léttara að finna hvar leikmaðurinn vann.
+                print("no_feasible_move =", self.no_feasible_move, " player =", self.player, " cards in deck =", len(self.deck),
+                      " last played card at coords: (", i, j, ")", "sequences:", self.sequences)
             self.gameover = True
 
         current_player = self.player
@@ -396,7 +502,7 @@ class SequenceEnv:
 
         i, j = pos
 
-        temp_board = self.discs_on_board[0].copy()
+        temp_board = self.discs_on_board.copy()
         temp_board[temp_board == -1] = self.player
 
         for p in range(self.num_players):
@@ -435,23 +541,29 @@ class SequenceEnv:
             elif i > 0:
                 attr_pos -= n
 
-            pl = p
-            for k in range(self.num_players):
-                pl += 1
-                if pl == n:
-                    pl = 1
-                # Uppfæra þann stað
-                new_attr = np.zeros(n)
-                new_attr[self.discs_on_board[pl][i,j]] = 1
-                self.attributes[k][attr_pos:attr_pos+n] = new_attr
+            # Uppfæra þann stað
+            disc = self.discs_on_board[i,j]
+            if disc == 0:
+                for k in range(self.num_players):
+                    new_attr = np.zeros(n)
+                    self.attributes[k][attr_pos:attr_pos+n] = new_attr
+            else:
+                for k in range(self.num_players):
+                    new_attr = np.zeros(n)
+                    new_attr[disc] = 1
+                    self.attributes[k][attr_pos:attr_pos+n] = new_attr
+                    disc -= 1
+                    if disc == 0:
+                        disc = self.num_players
 
             # Uppfæra hönd
             self.attributes[p][n*96+old_card] -= 1
-            self.attributes[p][n*96+new_card] += 1
+            if new_card is not None:
+                self.attributes[p][n*96+new_card] += 1
 
         else:
-            temp_board = self.discs_on_board[0].copy().flatten()
-            temp_board = temp_board[temp_board != -1] # Athuga hvort þetta sé skynsamlegt. Mikilvægt að tekið sé tillit til hornanna í is Terminal
+            temp_board = self.discs_on_board.copy().flatten()
+            temp_board = temp_board[temp_board != -1]
 
             attributes = []
             for i in range(self.num_players):
@@ -487,23 +599,25 @@ class SequenceEnv:
         return torch.cat((one_hot, torch.tensor(hond)))
         """
 
-    def get_value(self):
+    def get_value(self, p):
         # State-value function
         # Currently linear, can be changed to a neural network
-        return np.dot(self.attributes, self.value_weights)
+        #print(self.attributes[p])
+        #print(self.value_weights)
+        return np.dot(self.attributes[p], self.value_weights)
 
     # printing the board is useful for debugging code...
     def pretty_print(self):
         color = ["", "*", "*", "*", "*"]
         for i in range(10):
             for j in range(10):
-                if (self.discs_on_board[0,i,j] <= 0):
+                if (self.discs_on_board[i,j] <= 0):
                     if self.cards_on_board[i, j] >= 0:
                         print(self.the_cards[self.cards_on_board[i, j]], end=" ")
                     else:
                         print("-1", end=" ")
                 else:
-                    print(color[self.discs_on_board[0,i,j]] + str(self.discs_on_board[0,i,j]), end=" ")
+                    print(color[self.discs_on_board[i,j]] + str(self.discs_on_board[i,j]), end=" ")
             print("")
         for i in range(len(self.hand)):
             print("player ", i + 1, "'s hand: ", [self.the_cards[j] for j in self.hand[i]], sep="")
@@ -512,17 +626,46 @@ class SequenceEnv:
     def play_full_game(self):
         self.initialize_game()
         while not self.gameover:
-            self.makeMove()
+            self.makeMove(debug=True)
             print(self.discs_on_board[0])
             plt.imshow(self.discs_on_board[0])
             plt.colorbar()
             plt.show()
     
-    def learn(self, policy="parametrized", epsilon=0.1):
+    def learn(self, policy="parametrized", episodes=1000, verbose=True):
         self.initialize_game()
-        self.value_weights = np.zeros(self.attributes.size)
-        self.policy_weights = np.random.normal(size=self.attributes.size)
-        while not self.gameover:
-            old_value = self.get_value()
-            self.makeMove(policy=policy, epsilon=epsilon)
-            new_value = self.get_value()
+
+        # Implements One-step Actor-Critic
+        self.value_weights = np.zeros(self.attributes[0].size)
+        self.policy_weights = np.random.normal(size=self.attributes[0].size)
+
+        # Learning rates for value function and policy, respectively
+        alpha_w = 0.01
+        alpha_theta = 0.01
+
+        if verbose:
+            indices = [(i * episodes) //  20 for i in range(20)]
+            print('[', end='')
+        for i in range(episodes):
+            self.initialize_game()
+            while not self.gameover:
+                p = self.player-1
+                old_value = self.get_value(p)
+                self.makeMove(policy=policy, debug=False)
+                new_value = self.get_value(p)
+                delta = 0
+                if self.gameover:
+                    if self.no_feasible_move:
+                        delta = 0.5 - old_value
+                    else:
+                        delta = 1 - old_value
+                else:
+                    delta = new_value - old_value
+                self.value_weights += alpha_w * delta * self.attributes[p]
+                self.policy_weights += alpha_theta * delta * self.attributes[p]
+            if verbose:
+                while len(indices) > 0 and i == indices[0]:
+                    print('=', end='')
+                    del(indices[0])
+        if verbose:
+            print('] Finished {} episodes'.format(episodes))
