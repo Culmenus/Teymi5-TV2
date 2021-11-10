@@ -494,8 +494,8 @@ class SequenceEnv:
                 attributes.append(np.concatenate((one_hot_board, hond)))
 
                 # Sjónarhorn næsta leikmanns
-                temp_board[temp_board != 0] += 1
-                temp_board[temp_board == n] = 1
+                temp_board[temp_board == 1] = self.num_players
+                temp_board[temp_board != 0] -= 1
         
             self.attributes = np.array(attributes)
 
