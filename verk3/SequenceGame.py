@@ -499,22 +499,6 @@ class SequenceEnv:
         
             self.attributes = np.array(attributes)
 
-        """
-        # ELÍAS
-        temp_board = self.discs_on_board.copy().flatten()
-        # ATH. Segi að það sé enginn leikmaður á hornunum. Þetta þarf að endurskoða, kannski sleppa.
-        temp_board = temp_board[temp_board != -1]
-        # One hot encoding á borði
-        one_hot = torch.nn.functional.one_hot(torch.tensor(temp_board).long(), num_classes = n + 1)
-        # Flet borðið út. Hér væri líka hægt að halda forminu og breyta kóðun á hönd
-        one_hot = one_hot.flatten()
-        # Kóða höndina eins og talað var um
-        hond = np.zeros((50), dtype = np.int32)
-        np.add.at(hond, hand, 1)
-        # Skeyti hönd aftan við borð, fjöldi spila á indexi. Ef sett er hand í stað hönd skeytist nr. spila við, mögulega jafngóð kóðun
-        return torch.cat((one_hot, torch.tensor(hond)))
-        """
-
     def get_value(self, p):
         # State-value function
         # Currently linear, can be changed to a neural network
