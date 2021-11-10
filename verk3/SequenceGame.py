@@ -1,7 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from numpy import random
-from numpy.core.fromnumeric import size
 
 class SequenceEnv:
 
@@ -57,6 +55,7 @@ class SequenceEnv:
         self.player = 1
         self.discs_on_board = np.zeros((10, 10), dtype='int8')
         self.sequences = [0]*self.num_players
+        self.sequence_discs = set()
         self.discs_on_board[np.ix_([0, 0, 9, 9], [0, 9, 0, 9])] = -1
         self.deck = self.cards[np.argsort(np.random.rand(104))]
         self.hand = []
@@ -64,126 +63,107 @@ class SequenceEnv:
             self.hand.append(self.deck[:self.m[self.num_players]])  # deal player i m[n] cards
             self.deck = self.deck[self.m[self.num_players]:]  # remove cards from deck
 
-    # Function to check if the "reitur" where the one eyed jack is being played is a part of 5 in a row
-    # If yes the return true ("not allowed")
-    # Else return false ("allowed")
-    # Takes in where the jack is being played ,
-    # state of the board (disc on board),
-    # which player is playing it and nr of players (n).
-    def fiveInRow(self, row, col):
-        # TODO: Fjarlægja og búa til betri tékk
-        tempWin = [[1, 1, 1, 1, 1, 0, 0, 0, 0, 0],
-                [0, 1, 1, 1, 1, 1, 0, 0, 0, 0],
-                [0, 0, 1, 1, 1, 1, 1, 0, 0, 0],
-                [0, 0, 0, 1, 1, 1, 1, 1, 0, 0],
-                [0, 0, 0, 0, 1, 1, 1, 1, 1, 0],
-                [0, 0, 0, 0, 0, 1, 1, 1, 1, 1]]
-        other_player = self.player % self.num_players + 1
-        players_discs = self.discs_on_board.copy()
-        players_discs[players_discs == -1] = other_player
-        players_discs = players_discs == other_player
-
-        rows = list(players_discs[row])
-        cols = [i[col] for i in players_discs]
-        # Make the diagonal lines
-        temp_bdiag = []
-        temp_fdiag = []
-        temp_fdiag2 = []
-        temp_bdiag2 = []
-        for i in range(0, len(players_discs[0])):
-            if col - i >= 0 and row - i >= 0:
-                temp_fdiag2.append(players_discs[row - i][col - i])
-            if col + i < 10 and row + i < 10:
-                temp_fdiag.append(players_discs[row + i][col + i])
-            if col + i < 10 and row - i >= 0:
-                temp_bdiag2.append(players_discs[row - i][col + i])
-            if col - i >= 0 and row + i < 10:
-                temp_bdiag.append(players_discs[row + i][col - i])
-        temp_fdiag2.reverse()
-        temp_bdiag2.reverse()
-        if len(temp_fdiag) > 1:
-            if len(temp_fdiag2) > 0:
-                temp_fdiag2 = temp_fdiag2 + temp_fdiag[1:]
-            else:
-                temp_fdiag2 = temp_fdiag
-
-        if len(temp_bdiag) > 1:
-            if len(temp_bdiag2) > 0:
-                temp_bdiag2 = temp_bdiag2 + temp_bdiag[1:]
-            else:
-                temp_bdiag2 = temp_bdiag
-        # Fill them up if shorter than 10
-        if len(temp_bdiag2) < 10:
-            temp_bdiag2 = temp_bdiag2 + ([False]*(10 - len(temp_bdiag2)))
-        if len(temp_fdiag2) < 10:
-            temp_fdiag2 = temp_fdiag2 + ([False]*(10 - len(temp_fdiag2)))
-
-        lists = list(filter(lambda discs: np.sum(discs) >= 5,
-                    [cols, rows, temp_fdiag2, temp_bdiag2]))
-        for i in lists:
-            for j in tempWin:
-                # check if 5 in row and if the correct "reitur" is also being checked
-                if sum(np.multiply(i, j)) >= 5 and j[col] == 1:
-                    # Oh no this is not allowed
-                    return True
-        # Yay lets go
-        return False
-
-    def is_terminal(self, pos):
-        i, j = pos
+    def is_terminal(self, i, j):
+        # Checks whether the board is in a terminal state, given that
+        # the last move was played in position (i, j)
+        # Additionally updates a set containing the positions of all
+        # discs which are part of a sequence.
         p = self.player - 1
 
         temp_board = self.discs_on_board.copy()
         temp_board[0,0], temp_board[0,9], temp_board[9,0], temp_board[9,9] = [self.player]*4
         
-        lengths = []
         # Horizontal
-        t = 1
-        while j + t < 10 and temp_board[i,j+t] == self.player:
-            t += 1
-        lengths.append(t - 1)
-        t = 1
-        while j - t > 0 and temp_board[i,j-t] == self.player:
-            t += 1
-        lengths.append(t - 1)
+        t1 = 1
+        while j + t1 < 10 and temp_board[i,j+t1] == self.player:
+            t1 += 1
+        t1 -= 1
+        t2 = 1
+        while j - t2 >= 0 and temp_board[i,j-t2] == self.player:
+            t2 += 1
+        t2 -= 1
+        t = t1 + t2
+        if t >= 4:
+            self.sequence_discs.add((i, j))
+            if t >= 8:
+                return True
+            if t1 < 5 and t2 < 5:
+                self.sequences[p] += 1
+            if t2 < 5:
+                for k in range(1, t1+1):
+                    self.sequence_discs.add((i, j+k))
+            if t1 < 5:
+                for k in range(1, t2+1):
+                    self.sequence_discs.add((i, j-k))
 
         # Vertical
-        t = 1
-        while i + t < 10 and temp_board[i+t,j] == self.player:
-            t += 1
-        lengths.append(t - 1)
-        t = 1
-        while i - t > 0 and temp_board[i-t,j] == self.player:
-            t += 1
-        lengths.append(t - 1)
+        t1 = 1
+        while i + t1 < 10 and temp_board[i+t1,j] == self.player:
+            t1 += 1
+        t1 -= 1
+        t2 = 1
+        while i - t2 >= 0 and temp_board[i-t2,j] == self.player:
+            t2 += 1
+        t2 -= 1
+        t = t1 + t2
+        if t >= 4:
+            self.sequence_discs.add((i, j))
+            if t >= 8:
+                return True
+            if t1 < 5 and t2 < 5:
+                self.sequences[p] += 1
+            if t2 < 5:
+                for k in range(1, t1+1):
+                    self.sequence_discs.add((i+k, j))
+            if t1 < 5:
+                for k in range(1, t2+1):
+                    self.sequence_discs.add((i-k, j))
 
         # Main diagonal
-        t = 1
-        while i + t < 10 and j + t < 10 and temp_board[i+t,j+t] == self.player:
-            t += 1
-        lengths.append(t - 1)
-        t = 1
-        while i - t > 0 and j - t > 0 and temp_board[i-t,j-t] == self.player:
-            t += 1
-        lengths.append(t - 1)
+        t1 = 1
+        while i + t1 < 10 and j + t1 < 10 and temp_board[i+t1,j+t1] == self.player:
+            t1 += 1
+        t1 -= 1
+        t2 = 1
+        while i - t2 >= 0 and j - t2 >= 0 and temp_board[i-t2,j-t2] == self.player:
+            t2 += 1
+        t2 -= 1
+        t = t1 + t2
+        if t >= 4:
+            self.sequence_discs.add((i, j))
+            if t >= 8:
+                return True
+            if t1 < 5 and t2 < 5:
+                self.sequences[p] += 1
+            if t2 < 5:
+                for k in range(1, t1+1):
+                    self.sequence_discs.add((i+k, j+k))
+            if t1 < 5:
+                for k in range(1, t2+1):
+                    self.sequence_discs.add((i-k, j-k))
 
         # Antidiagonal
-        t = 1
-        while i + t < 10 and j - t > 0 and temp_board[i+t,j-t] == self.player:
-            t += 1
-        lengths.append(t - 1)
-        t = 1
-        while i - t > 0 and j + t < 10 and temp_board[i-t,j+t] == self.player:
-            t += 1
-        lengths.append(t - 1)
-
-        for k in range(4):
-            if lengths[2*k] + lengths[2*k+1] >= 8:
+        t1 = 1
+        while i + t1 < 10 and j - t1 >= 0 and temp_board[i+t1,j-t1] == self.player:
+            t1 += 1
+        t1 -= 1
+        t2 = 1
+        while i - t2 >= 0 and j + t2 < 10 and temp_board[i-t2,j+t2] == self.player:
+            t2 += 1
+        t2 -= 1
+        t = t1 + t2
+        if t >= 4:
+            self.sequence_discs.add((i, j))
+            if t >= 8:
                 return True
-
-        for k in range(4):
-            if (lengths[2*k] + lengths[2*k+1] >= 4) and not (lengths[2*k] >= 5 or lengths[2*k+1] >= 5):
+            if t1 < 5 and t2 < 5:
                 self.sequences[p] += 1
+            if t2 < 5:
+                for k in range(1, t1+1):
+                    self.sequence_discs.add((i+k, j-k))
+            if t1 < 5:
+                for k in range(1, t2+1):
+                    self.sequence_discs.add((i-k, j+k))
 
         if self.num_players == 2:
             return self.sequences[p] > 1
@@ -250,8 +230,7 @@ class SequenceEnv:
             temp_legal_moves_1J = np.argwhere((self.discs_on_board != -1) & (self.discs_on_board != 0) & (self.discs_on_board != self.player))
             if self.num_players == 2:
                 for i in temp_legal_moves_1J:
-                    temp = self.fiveInRow(i[0], i[1])
-                    if temp == False:
+                    if tuple(i) not in self.sequence_discs:
                         legal_moves_1J.append(i)
             legal_moves_1J = np.array(legal_moves_1J)
             if legal_moves_1J.size == 0:
@@ -279,6 +258,7 @@ class SequenceEnv:
         disc = -1
         i, j = 0, 0
         if len(all_moves) > 0:
+            self.no_feasible_move = 0
             k = 0
             randomMove = False
             if policy == "epsilon_greedy":
@@ -323,20 +303,20 @@ class SequenceEnv:
                 played_card = 48
             else:
                 played_card = 49
-        else:
-            self.no_feasible_move += 1
-        if disc >= 0:
-            self.no_feasible_move = 0
 
             # Update board, hand, and attributes
             self.discs_on_board[i,j] = disc
             new_card = self.draw_card(played_card)
             self.set_attributes(pos=(i,j), old_card=played_card, new_card=new_card)
-        if self.no_feasible_move == self.num_players or self.is_terminal(pos=(i,j)):
+        else:
+            self.no_feasible_move += 1
+            if self.no_feasible_move == self.num_players:
+                self.gameover = True
+        if disc > 0 and self.is_terminal(i, j):
             if debug:
                 # Bætti við að það prentar út hnitin á síðasta spili sem var spilað. Léttara að finna hvar leikmaðurinn vann.
                 print("no_feasible_move =", self.no_feasible_move, " player =", self.player, " cards in deck =", len(self.deck),
-                      " last played card at coords: (", i, j, ")", "sequences:", self.sequences)
+                      " last played card at coords: (", i, j, ")", "sequences:", self.sequences, "sequence discs:", self.sequence_discs)
             self.gameover = True
 
         current_player = self.player
@@ -563,17 +543,12 @@ class SequenceEnv:
         while not self.gameover:
             self.make_move(debug=verbose)
             if verbose:
-                print(self.discs_on_board)
                 plt.imshow(self.discs_on_board)
                 plt.colorbar()
                 plt.show()
     
-    def learn(self, policy="parametrized", episodes=1000, verbose=True):
+    def learn(self, policy="parametrized", alpha_w=0.001, alpha_theta=0.001, episodes=1000, verbose=True):
         # Implements One-step Actor-Critic
-
-        # Learning rates for value function and policy, respectively
-        alpha_w = 0.001
-        alpha_theta = 0.001
 
         if verbose:
             indices = [(i * episodes) //  20 for i in range(20)]
