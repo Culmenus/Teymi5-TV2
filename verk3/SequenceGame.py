@@ -34,13 +34,7 @@ class SequenceEnv:
         self.attributes = []
         self.heuristic_1_table = np.zeros((num_players, 10, 10))
 
-        # Some linear function approximators
-        # Can be changed to neural networks
-        self.value_weights = []
-        self.policy_weights = []
-        
         # Lookup table fyrir spilin
-        # Confirmed bug free
         self.card_positions = {}
         for i in range(48):
             self.card_positions[i] = []
@@ -50,6 +44,11 @@ class SequenceEnv:
                     self.card_positions[self.cards_on_board[i,j]].append((i, j))
         for i in range(12):
             self.card_positions[i] = tuple(self.card_positions[i])
+
+        # Some linear function approximators
+        # Can be changed to neural networks
+        self.value_weights = np.zeros(self.attributes[0].size)
+        self.policy_weights = np.random.normal(size=self.attributes[0].size)
 
     def initialize_game(self):
         self.gameover = False
@@ -129,71 +128,7 @@ class SequenceEnv:
         # Yay lets go
         return False
 
-    # (floki@hi.is) #moddað í hlutbundið af oat
-    def isTerminal(self):
-        tempWin = [[1, 1, 1, 1, 1, 0, 0, 0, 0, 0],
-                   [0, 1, 1, 1, 1, 1, 0, 0, 0, 0],
-                   [0, 0, 1, 1, 1, 1, 1, 0, 0, 0],
-                   [0, 0, 0, 1, 1, 1, 1, 1, 0, 0],
-                   [0, 0, 0, 0, 1, 1, 1, 1, 1, 0],
-                   [0, 0, 0, 0, 0, 1, 1, 1, 1, 1]]
-        extraWin = [[0,1,1,1,1,1,1,1,1,1],
-                    [1,1,1,1,1,1,1,1,1,0],
-                    [1,1,1,1,1,1,1,1,1,1]]
-        temp_board = self.discs_on_board.copy()
-        temp_board[temp_board == -1] = self.player
-        test = temp_board == self.player
-        # test[row][col] = 1
-        max_col = len(test[0])
-        max_row = len(test)
-        cols = [[] for _ in range(max_col)]
-        rows = [[] for _ in range(max_row)]
-        fdiag = [[] for _ in range(max_row + max_col - 1)]
-        bdiag = [[] for _ in range(len(fdiag))]
-        min_bdiag = -max_row + 1
-
-        for x in range(max_col):
-            for y in range(max_row):
-                cols[x].append(test[y][x])
-                rows[y].append(test[y][x])
-                fdiag[x + y].append(test[y][x])
-                bdiag[x - y - min_bdiag].append(test[y][x])
-        lists = cols + rows + bdiag + fdiag
-
-        np_lists = np.array(lists, dtype=object)
-
-        filt = []
-        for i in range(0, len(lists)):
-            filt_i = len(np_lists[i]) >= 5 and sum(np_lists[i]) >= 5
-            filt.append(filt_i)
-
-        new_list = list(np_lists[filt])
-        temp = []
-        for i in new_list:
-            if (len(i) < 10):
-                i = i + ([0.0] * (10 - len(i)))
-            temp.append(i)
-        if (len(temp) == 0):
-            return False
-        player_sum = 0
-        for i in temp:
-            temp_sum = 0
-            for j in tempWin:
-                temp_sum = sum(np.multiply(i, j))
-                if temp_sum >= 5:
-                    if self.num_players == 2:
-                        player_sum = player_sum + temp_sum
-                        extra_sum0 = sum(np.multiply(extraWin[0], i))
-                        extra_sum1 = sum(np.multiply(extraWin[1], i))
-                        extra_sum2 = sum(np.multiply(extraWin[2], i))
-                        if player_sum >= 10 or extra_sum0 >= 9 or extra_sum1 >= 9 or extra_sum2 >= 10:
-                            return True
-                        break
-                    else:
-                        return True          
-        return False
-    
-    def isTerminal2(self, pos):
+    def isTerminal(self, pos):
         i, j = pos
         p = self.player - 1
 
@@ -332,7 +267,6 @@ class SequenceEnv:
         return legal_moves, legal_moves_1J, legal_moves_2J
     
     def makeMove(self, policy="random", epsilon=0.1, debug=False):
-        # Þetta þarf að bæta, taka inn stefnu og spila eftir henni
         legal_moves, legal_moves_1J, legal_moves_2J = self.getMoves()
         len1 = len(legal_moves)
         len2 = len1 + len(legal_moves_1J)
@@ -347,11 +281,9 @@ class SequenceEnv:
                 cmp = np.random.rand()
                 if cmp < epsilon:
                     randomMove = True
-                else:
-                    pass # TODO: Find afterstate values
             if policy == "random" or randomMove:
                 k = np.random.choice(np.arange(len(all_moves)), 1)
-            elif policy == "parametrized":
+            elif policy == "parametrized" or policy == "epsilon_greedy":
                 # Find afterstate values
                 policy_estimates = []
                 values = []
@@ -397,7 +329,7 @@ class SequenceEnv:
             self.discs_on_board[i,j] = disc
             new_card = self.drawCard(played_card)
             self.set_attributes(pos=(i,j), old_card=played_card, new_card=new_card)
-        if self.no_feasible_move == self.num_players or self.isTerminal2(pos=(i,j)):
+        if self.no_feasible_move == self.num_players or self.isTerminal(pos=(i,j)):
             if debug:
                 # Bætti við að það prentar út hnitin á síðasta spili sem var spilað. Léttara að finna hvar leikmaðurinn vann.
                 print("no_feasible_move =", self.no_feasible_move, " player =", self.player, " cards in deck =", len(self.deck),
@@ -636,8 +568,6 @@ class SequenceEnv:
         self.initialize_game()
 
         # Implements One-step Actor-Critic
-        self.value_weights = np.zeros(self.attributes[0].size)
-        self.policy_weights = np.random.normal(size=self.attributes[0].size)
 
         # Learning rates for value function and policy, respectively
         alpha_w = 0.01
