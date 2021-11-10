@@ -249,7 +249,7 @@ class SequenceEnv:
             print()
         return legal_moves, legal_moves_1J, legal_moves_2J
     
-    def make_move(self, policy="random", epsilon=0.1, debug=False):
+    def make_move(self, policy, epsilon=0.1, debug=False):
         legal_moves, legal_moves_1J, legal_moves_2J = self.get_moves()
         len1 = len(legal_moves)
         len2 = len1 + len(legal_moves_1J)
@@ -257,17 +257,18 @@ class SequenceEnv:
         played_card = 0
         disc = -1
         i, j = 0, 0
+        p = self.player - 1
         if len(all_moves) > 0:
             self.no_feasible_move = 0
             k = 0
             randomMove = False
-            if policy == "epsilon_greedy":
+            if policy[p] == "epsilon_greedy":
                 cmp = np.random.rand()
                 if cmp < epsilon:
                     randomMove = True
-            if policy == "random" or randomMove:
+            if policy[p] == "random" or randomMove:
                 k = np.random.choice(np.arange(len(all_moves)), 1)[0]
-            elif policy == "parametrized" or policy == "epsilon_greedy":
+            elif policy[p] == "parametrized" or policy[p] == "epsilon_greedy":
                 # Find afterstate values
                 policy_estimates = []
                 values = []
@@ -285,9 +286,9 @@ class SequenceEnv:
                     policy_estimates.append(pol)
                     values.append(val)
                 policy_estimates = np.array(policy_estimates)
-                if policy == "epsilon_greedy":
+                if policy[p] == "epsilon_greedy":
                     k = np.argmax(policy_estimates)
-                elif policy == "parametrized":
+                elif policy[p] == "parametrized":
                     # Linear softmax policy
                     exp = np.exp(policy_estimates)
                     probabilities = exp / np.sum(exp)
@@ -318,13 +319,13 @@ class SequenceEnv:
                 print("no_feasible_move =", self.no_feasible_move, " player =", self.player, " cards in deck =", len(self.deck),
                       " last played card at coords: (", i, j, ")", "sequences:", self.sequences, "sequence discs:", self.sequence_discs)
             self.gameover = True
+            return
 
         current_player = self.player
         self.player = current_player % self.num_players + 1
 
     def heuristic_1(self, temp_board, pos):
         # Namminamm
-        # temp_board: discs_on_board, nema player í stað -1 í hornunum
 
         s = 0
         i = pos[0]
@@ -538,10 +539,12 @@ class SequenceEnv:
             print("player ", i + 1, "'s hand: ", [self.the_cards[j] for j in self.hand[i]], sep="")
 
     #naive test
-    def play_full_game(self, verbose=True):
+    def play_full_game(self, policy="random", verbose=True):
+        if isinstance(policy, str):
+            policy = tuple([policy]*self.num_players)
         self.initialize_game()
         while not self.gameover:
-            self.make_move(debug=verbose)
+            self.make_move(policy=policy, debug=verbose)
             if verbose:
                 plt.imshow(self.discs_on_board)
                 plt.colorbar()
@@ -550,6 +553,9 @@ class SequenceEnv:
     def learn(self, policy="parametrized", alpha_w=0.001, alpha_theta=0.001, episodes=1000, verbose=True):
         # Implements One-step Actor-Critic
 
+        if isinstance(policy, str):
+            policy = tuple([policy]*self.num_players)
+        wins = [0]*self.num_players
         if verbose:
             indices = [(i * episodes) //  20 for i in range(20)]
             print("[", end="")
@@ -571,9 +577,11 @@ class SequenceEnv:
                     delta = new_value - old_value
                 self.value_weights += alpha_w * delta * self.attributes[p]
                 self.policy_weights += alpha_theta * delta * self.attributes[p]
+            wins[p] += 1
             if verbose:
                 while len(indices) > 0 and i == indices[0]:
                     print('=', end='')
                     del(indices[0])
         if verbose:
             print("] Finished {} episodes".format(episodes))
+        return wins
