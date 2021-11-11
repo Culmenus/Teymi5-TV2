@@ -8,31 +8,31 @@ For episodes:
 	player <- 1
 	delta <- [0, 0]
 	I <- 1
+	Term = False
 	For steps in episode:
-		if S is terminal:
-			#value is 0
-			# ...
-			break
 		moves <- getMoves(S, hands[player])
 		action <- policy(moves)
 		# Observation of new state and reward
-		Sˆ, R <- play(S, action) # R \in (0, 0.5, 1) in terminal states for (loss, tie, win)
+		Sˆ, R <- play(S, action) # Reward is (0, 0.5, 1) in transition to terminal states (loss, tie, win)
 		# Decay elegibility trace and update for previous state
 		z[player][w] <- gamma*lambda_w*z[player] + value_gradient(S, w)
 		z[player][theta] <- gamma*lambda*z[player][theta] + I*ln(policy_gradient(action, S, theta)
 		# Create target
-		delta[player] <- R + gamma*value(Sˆ, w) - value(S, w)
+		if S' is terminal:
+			v <- 0
+			Term = True
+		else:
+			v <- value(S', w)
+		delta[player] <- R + gamma*v - value(S, w)
 		# Update every other time so that the parameters are stable for one round
-		if player=2 or S is terminal:
-			# Update parameters
-			w <- w + alpha_w*delta[1]*z[1][w]
-			w <- w + alpha_w*delta[2]*z[2][w]
-			theta <- theta + alpha_theta*delta[1]*z[1][theta]
-			theta <- theta + alpha_theta*delta[2]*z[2][theta]
+		# Update parameters
+		w <- w + alpha_w*delta[player]*z[player][w]
+		theta <- theta + alpha_theta*delta[player]*z[player][theta]
 		I <- gamma*I
 		S <- Sˆ
 		player <- 3 - player # For hand and end board. Only 2 players.
-		invert_board() # Erum við búin að hætta við þetta?
+		if Term:
+			break
 ```
 
 # Value function
