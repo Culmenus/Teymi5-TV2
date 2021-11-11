@@ -13,7 +13,7 @@ For episodes:
 		moves <- getMoves(S, hands[player])
 		action <- policy(moves)
 		# Observation of new state and reward
-		Sˆ, R <- play(S, action) # Reward is (0, 0.5, 1) in transition to terminal states (loss, tie, win)
+		Sˆ, R <- play(S, action) # Reward is (0.5, 1) in transition to terminal states (tie, win), 0 otherwise
 		# Decay elegibility trace and update for previous state
 		z[player][w] <- gamma*lambda_w*z[player] + value_gradient(S, w)
 		z[player][theta] <- gamma*lambda*z[player][theta] + I*ln(policy_gradient(action, S, theta)
@@ -37,8 +37,7 @@ For episodes:
 
 # Value function
 
-The value() function will be a simple pytorch neural network object, with an input layer for a vector of the board and hand, two fully connected hidden layers and an output layer of a single value. The parameter update will therefore be stochastic gradient decent that takes elegibility traces into account. 
-The policy function will be a supplementary last layer of the same NN that constitutes the value function. It will be linear weights from the second to last layer with an added softmax function.
+The value() function will be implemented differently by different team members, the general idea is to make a simple pytorch neural network object, with an input layer for our attributes, one to two fully connected hidden layers and an output layer of a single value. The parameter update will therefore be stochastic gradient decent that takes elegibility traces into account. The policy function will be a supplementary last layer of the same NN that constitutes the value function. It will be linear weights from the second to last layer with an added softmax function.
 
 The attributes will be represented by a one-dimensional array consisting of the following:
 - The board, represented with a one-hot encoding of each tile
