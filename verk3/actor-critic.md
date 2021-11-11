@@ -37,11 +37,11 @@ For episodes:
 
 # Value function
 
-The value() function will be implemented differently by different team members, the general idea is to make a simple pytorch neural network object, with an input layer for our attributes, one to two fully connected hidden layers and an output layer of a single value. The parameter update will therefore be stochastic gradient decent that takes elegibility traces into account. The policy function will be a supplementary last layer of the same NN that constitutes the value function. It will be linear combination from the second to last layer with an added softmax function.
+The value() function will be implemented differently by different team members, the general idea is to make a simple pytorch neural network object, with an input layer for our attributes, one to two fully connected hidden layers and an output layer of a single value. The parameter update will therefore be stochastic gradient decent that takes eligibility traces into account. The policy function will be a supplementary last layer of [the NN that constitutes the value function]. The policy is a linear combination of the last layer of the NN and the outcomes are softmax-normalized over all possible afterstates.
 
 The attributes will be represented by a one-dimensional array consisting of the following:
 - The board, represented with a one-hot encoding of each tile
 - The cards in hand, represented by a 50-element vector whose elements in turn represent the number of a given card in the current hand
 - The trash pile (used cards), represented in the same way as the current hand
 
-The reward function will return 0 for entering any state other than a terminal state. The reward for entering a terminal state will be 1 for a win and 0.5 for a draw. Note that entering a terminal state cannot result in a loss. The value for a terminal state will be around 0 (imperfections may result due to the approximate nature of the value function), and no reward will be obtained after entering a terminal state.
+The reward function will return 0 for entering any state other than a terminal state. The reward for entering a terminal state will be 1 for a win and 0.5 for a draw. Note that entering a terminal state cannot result in a loss. The value for a terminal state will be 0 and no reward will be obtained after entering a terminal state.
