@@ -1,6 +1,7 @@
 # Leikmaðurinn hans Tómasar
 import numpy as np
 import matplotlib.pyplot as plt
+from numpy.lib.twodim_base import _histogram2d_dispatcher
 
 class SequenceEnv:
     def __init__(self, num_players = 2):
@@ -41,6 +42,7 @@ class SequenceEnv:
             self.card_positions[i] = tuple(self.card_positions[i])
         
         self.heuristic_1_table = np.zeros((num_players, 10, 10))
+        self.heuristic_2_table = np.zeros((num_players, 10, 10))
 
         self.initialize_game() # So that all variables get initialized
         self.set_attributes()
@@ -309,8 +311,6 @@ class SequenceEnv:
             self.discs_on_board[i,j] = disc
             new_card = self.draw_card(played_card)
 
-            self.update_heuristic_1(pos=(i,j))
-
             self.set_attributes(pos=(i,j), old_card=played_card, new_card=new_card)
         else:
             self.no_feasible_move += 1
@@ -425,6 +425,18 @@ class SequenceEnv:
         
         return s
 
+    def heuristic_2(self, pos, p):
+        # Namminamminamm
+        pos = tuple(pos)
+
+        if self.discs_on_board[pos] != 0:
+            return 0
+        elif self.cards_on_board[pos] in self.hand[p]:
+            return 1
+        else:
+            return 0.1
+        
+
     def update_heuristic_1(self, pos):
         # Uppfæra Heuristic 1 eftir leik
 
@@ -517,6 +529,14 @@ class SequenceEnv:
             if new_card is not None:
                 self.attributes[p][n*96+new_card] += 1
             
+            # Heuristic 1
+            self.update_heuristic_1(pos)
+            
+            # Heuristic 2
+            for k in range(self.num_players):
+                self.heuristic_2_table[k][pos] = self.heuristic_2(pos, k)
+            
+            hf = np.multiply(self.heuristic_1_table, self.heuristic_2_table)
             t = n * 96 + 50
             for k in range(self.num_players):
                 self.attributes[k][t:t+100] = self.heuristic_1_table[k].flatten()
@@ -524,22 +544,24 @@ class SequenceEnv:
                 mh1 = np.sum(self.heuristic_1_table[k]) / 100
                 mh2 = np.sum(np.square(self.heuristic_1_table[k])) / 100
                 mh3 = np.max(self.heuristic_1_table[k])
-                meta_heuristics = np.array([mh1, mh2, mh3])
+                mh4 = np.sum(hf[k]) / 100
+                mh5 = np.sum(np.square(hf[k])) / 100
+                mh6 = np.max(hf[k])
+                meta_heuristics = np.array([mh1, mh2, mh3, mh4, mh5, mh6])
 
-                self.attributes[k][t+100:t+103] = meta_heuristics
-                self.attributes[k][t+103] = self.sequences[k]
+                self.attributes[k][t+100:t+106] = meta_heuristics
+                self.attributes[k][t+106] = self.sequences[k]
 
         else:
             # Assumes empty board
 
             temp_board = np.zeros(96, dtype=np.int8)
 
-            # Heuristic 1 in corners
-            heuristic_board = self.discs_on_board.copy()
-            
+            # Heuristic 1
+            self.heuristic_1_table = np.zeros((self.num_players, 10, 10))
+
             for i in range(self.num_players):
-                heuristic_board[0,0], heuristic_board[0,9], heuristic_board[9,0], heuristic_board[9,9] = [i+1]*4
-                for k in range(1, 9):
+                for k in range(0, 9):
                     self.heuristic_1_table[i][0,k] = 1
                     self.heuristic_1_table[i][9,k] = 1
 
@@ -548,8 +570,17 @@ class SequenceEnv:
                     
                     self.heuristic_1_table[i][k,k] = 1
                     self.heuristic_1_table[i][k,9-k] = 1
+            
+            # Heuristic 2
+            self.heuristic_2_table = 0.1 + np.zeros((self.num_players, 10, 10))
+
+            for i in range(self.num_players):
+                for card in self.hand[i]:
+                    if card < 48:
+                        self.heuristic_2_table[i][tuple(self.card_positions[card])] = 1
 
             attributes = []
+            hf = np.multiply(self.heuristic_1_table, self.heuristic_2_table)
             for i in range(self.num_players):
                 # One hot encoding á borði
                 one_hot_board = np.zeros((temp_board.size, n))
@@ -563,7 +594,10 @@ class SequenceEnv:
                 mh1 = np.sum(self.heuristic_1_table[i]) / 100
                 mh2 = np.sum(np.square(self.heuristic_1_table[i])) / 100
                 mh3 = np.max(self.heuristic_1_table[i])
-                meta_heuristics = np.array([mh1, mh2, mh3])
+                mh4 = np.sum(hf[i]) / 100
+                mh5 = np.sum(np.square(hf[i])) / 100
+                mh6 = np.max(hf[i])
+                meta_heuristics = np.array([mh1, mh2, mh3, mh4, mh5, mh6])
 
                 attributes.append(np.concatenate((one_hot_board, hond, self.heuristic_1_table[i].flatten(), meta_heuristics, [self.sequences[i]])))
 
