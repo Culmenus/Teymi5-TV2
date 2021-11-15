@@ -517,34 +517,37 @@ class SequenceEnv:
             if new_card is not None:
                 self.attributes[p][n*96+new_card] += 1
             
+            t = n * 96 + 50
             for k in range(self.num_players):
-                self.attributes[k][n*96+50:] = self.heuristic_1_table[k].flatten()
+                self.attributes[k][t:t+100] = self.heuristic_1_table[k].flatten()
+            
+                mh1 = np.sum(self.heuristic_1_table[k]) / 100
+                mh2 = np.sum(np.square(self.heuristic_1_table[k])) / 100
+                mh3 = np.max(self.heuristic_1_table[k])
+                meta_heuristics = np.array([mh1, mh2, mh3])
+
+                self.attributes[k][t+100:t+103] = meta_heuristics
+                self.attributes[k][t+103] = self.sequences[k]
 
         else:
-            temp_board = self.discs_on_board.copy().flatten()
-            temp_board = temp_board[temp_board != -1]
+            # Assumes empty board
+
+            temp_board = np.zeros(96, dtype=np.int8)
 
             # Heuristic 1 in corners
             heuristic_board = self.discs_on_board.copy()
             
             for i in range(self.num_players):
                 heuristic_board[0,0], heuristic_board[0,9], heuristic_board[9,0], heuristic_board[9,9] = [i+1]*4
-                for k in range(1, 5):
-                    self.heuristic_1_table[i][0,k] = self.heuristic_1(heuristic_board, (0,k), i+1)
-                    self.heuristic_1_table[i][k,0] = self.heuristic_1(heuristic_board, (k,0), i+1)
-                    self.heuristic_1_table[i][k,k] = self.heuristic_1(heuristic_board, (k,k), i+1)
-                    
-                    self.heuristic_1_table[i][0,9-k] = self.heuristic_1(heuristic_board, (0,9-k), i+1)
-                    self.heuristic_1_table[i][k,9] = self.heuristic_1(heuristic_board, (k,9), i+1)
-                    self.heuristic_1_table[i][k,9-k] = self.heuristic_1(heuristic_board, (k,9-k), i+1)
-                    
-                    self.heuristic_1_table[i][9,k] = self.heuristic_1(heuristic_board, (9,k), i+1)
-                    self.heuristic_1_table[i][9-k,0] = self.heuristic_1(heuristic_board, (9-k,0), i+1)
-                    self.heuristic_1_table[i][9-k,k] = self.heuristic_1(heuristic_board, (9-k,k), i+1)
+                for k in range(1, 9):
+                    self.heuristic_1_table[i][0,k] = 1
+                    self.heuristic_1_table[i][9,k] = 1
 
-                    self.heuristic_1_table[i][9,9-k] = self.heuristic_1(heuristic_board, (9,9-k), i+1)
-                    self.heuristic_1_table[i][9-k,9] = self.heuristic_1(heuristic_board, (9-k,9), i+1)
-                    self.heuristic_1_table[i][9-k,9-k] = self.heuristic_1(heuristic_board, (9-k,9-k), i+1)
+                    self.heuristic_1_table[i][k,0] = 1
+                    self.heuristic_1_table[i][k,9] = 1
+                    
+                    self.heuristic_1_table[i][k,k] = 1
+                    self.heuristic_1_table[i][k,9-k] = 1
 
             attributes = []
             for i in range(self.num_players):
@@ -556,7 +559,13 @@ class SequenceEnv:
                 # Hönd
                 hond = np.zeros(50, dtype=np.uint8)
                 np.add.at(hond, self.hand[i], 1)
-                attributes.append(np.concatenate((one_hot_board, hond, self.heuristic_1_table[i].flatten())))
+
+                mh1 = np.sum(self.heuristic_1_table[i]) / 100
+                mh2 = np.sum(np.square(self.heuristic_1_table[i])) / 100
+                mh3 = np.max(self.heuristic_1_table[i])
+                meta_heuristics = np.array([mh1, mh2, mh3])
+
+                attributes.append(np.concatenate((one_hot_board, hond, self.heuristic_1_table[i].flatten(), meta_heuristics, [self.sequences[i]])))
 
                 # Sjónarhorn næsta leikmanns
                 temp_board[temp_board == 1] = self.num_players
@@ -589,7 +598,7 @@ class SequenceEnv:
                 fig.colorbar(im, ax=axes[2])
                 plt.show()
     
-    def learn(self, policy="parametrized", alpha_w=0.001, alpha_theta=0.001, episodes=1000, verbose=True):
+    def learn(self, policy="parametrized", epsilon=0.1, alpha_w=0.001, alpha_theta=0.001, episodes=1000, verbose=True):
         # Implements One-step Actor-Critic
 
         if isinstance(policy, str):
@@ -607,7 +616,7 @@ class SequenceEnv:
             while not self.gameover:
                 p = self.player-1
                 old_value = self.get_value(p)
-                self.make_move(policy=policy, debug=False)
+                self.make_move(policy=policy, epsilon=epsilon, debug=False)
                 new_value = self.get_value(p)
                 delta = 0
                 if self.gameover:
