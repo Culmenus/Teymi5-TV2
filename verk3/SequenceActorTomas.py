@@ -1,9 +1,8 @@
-from PIL.Image import new
+# Leikmaðurinn hans Tómasar
 import numpy as np
 import matplotlib.pyplot as plt
 
 class SequenceEnv:
-
     def __init__(self, num_players = 2):
         # some global variables used by the games, what we get in the box!
         self.num_players = num_players
@@ -41,6 +40,8 @@ class SequenceEnv:
         for i in range(12):
             self.card_positions[i] = tuple(self.card_positions[i])
         
+        self.heuristic_1_table = np.zeros((num_players, 10, 10))
+
         self.initialize_game() # So that all variables get initialized
         self.set_attributes()
 
@@ -170,7 +171,6 @@ class SequenceEnv:
         else:
             return self.sequences[p] > 0
 
-    # (tpr@hi.is)
     def draw_card(self, card_played, debug=False):
         player_hand = self.hand[self.player-1]
         # remove card played from hand
@@ -309,6 +309,8 @@ class SequenceEnv:
             self.discs_on_board[i,j] = disc
             new_card = self.draw_card(played_card)
 
+            self.update_heuristic_1(pos=(i,j))
+
             self.set_attributes(pos=(i,j), old_card=played_card, new_card=new_card)
         else:
             self.no_feasible_move += 1
@@ -325,6 +327,159 @@ class SequenceEnv:
         current_player = self.player
         self.player = current_player % self.num_players + 1
 
+    def heuristic_1(self, temp_board, pos, p):
+        # Namminamm
+
+        s = 0
+        i, j = pos
+        board_rows = 10
+        board_cols = 10
+
+        # Horizontal
+        mint = max(-4, -j)
+        maxt = min(4, board_cols-1-j)
+        t = mint
+        while t < 0:
+            if temp_board[i][j+t] != p and temp_board[i][j+t] != 0:
+                mint = t+1
+            t += 1
+        t = maxt
+        while t > 0:
+            if temp_board[i][j+t] != p and temp_board[i][j+t] != 0:
+                maxt = t-1
+            t -= 1
+
+        range = maxt - mint + 1
+        if range >= 5:
+            t = mint
+            while t <= maxt:
+                if temp_board[i][j+t] == p:
+                    s += min(min(t - mint, maxt - t), range - 5) + 1
+                t += 1
+
+        # Vertical
+        mint = max(-4, -i)
+        maxt = min(4, board_rows-1-i)
+        t = mint
+        while t < 0:
+            if temp_board[i+t][j] != p and temp_board[i+t][j] != 0:
+                mint = t+1
+            t += 1
+        t = maxt
+        while t > 0:
+            if temp_board[i+t][j] != p and temp_board[i+t][j] != 0:
+                maxt = t-1
+            t -= 1
+
+        range = maxt - mint + 1
+        if range >= 5:
+            t = mint
+            while t <= maxt:
+                if temp_board[i+t][j] == p:
+                    s += min(min(t - mint, maxt - t), range - 5) + 1
+                t += 1
+        
+        # Main diagonal
+        mint = max(-4, max(-i, -j))
+        maxt = min(4, min(board_cols-1-i, board_rows-1-j))
+        t = mint
+        while t < 0:
+            if temp_board[i+t][j+t] != p and temp_board[i+t][j+t] != 0:
+                mint = t+1
+            t += 1
+        t = maxt
+        while t > 0:
+            if temp_board[i+t][j+t] != p and temp_board[i+t][j+t] != 0:
+                maxt = t-1
+            t -= 1
+
+        range = maxt - mint + 1
+        if range >= 5:
+            t = mint
+            while t <= maxt:
+                if temp_board[i+t][j+t] == p:
+                    s += min(min(t - mint, maxt - t), range - 5) + 1
+                t += 1
+        
+        # Antidiagonal
+        mint = max(-4, max(-i, j-9))
+        maxt = min(4, min(9-i, j))
+        t = mint
+        while t < 0:
+            if temp_board[i+t][j-t] != p and temp_board[i+t][j-t] != 0:
+                mint = t+1
+            t += 1
+        t = maxt
+        while t > 0:
+            if temp_board[i+t][j-t] != p and temp_board[i+t][j-t] != 0:
+                maxt = t-1
+            t -= 1
+
+        range = maxt - mint + 1
+        if range >= 5:
+            t = mint
+            while t <= maxt:
+                if temp_board[i+t][j-t] == p:
+                    s += min(min(t - mint, maxt - t), range - 5) + 1
+                t += 1
+        
+        return s
+
+    def update_heuristic_1(self, pos):
+        # Uppfæra Heuristic 1 eftir leik
+
+        i, j = pos
+        temp_board = self.discs_on_board.copy()
+
+        if temp_board[i,j] != 0:
+            for p in range(self.num_players):
+                self.heuristic_1_table[p][i,j] = 0
+        else:
+            for p in range(self.num_players):
+                self.heuristic_1_table[p][i,j] = self.heuristic_1(temp_board, (i, j), p+1)
+
+        for p in range(self.num_players):
+            temp_board[0,0], temp_board[0,9], temp_board[9,0], temp_board[9,9] = [p+1]*4
+            # Horizontal
+            for t in range(1, min(5, 10 - j)):
+                if temp_board[i][j+t] != 0 and temp_board[i][j+t] != p+1:
+                    break
+                self.heuristic_1_table[p][i][j+t] = self.heuristic_1(temp_board, (i, j+t), p+1)
+            for t in range(1, min(5, j + 1)):
+                if temp_board[i][j-t] != 0 and temp_board[i][j-t] != p+1:
+                    break
+                self.heuristic_1_table[p][i][j-t] = self.heuristic_1(temp_board, (i, j-t), p+1)
+        
+            # Vertical
+            for t in range(1, min(5, 10 - i)):
+                if temp_board[i+t][j] != 0 and temp_board[i+t][j] != p+1:
+                    break
+                self.heuristic_1_table[p][i+t][j] = self.heuristic_1(temp_board, (i+t, j), p+1)
+            for t in range(1, min(5, i + 1)):
+                if temp_board[i-t][j] != 0 and temp_board[i-t][j] != p+1:
+                    break
+                self.heuristic_1_table[p][i-t][j] = self.heuristic_1(temp_board, (i-t, j), p+1)
+
+            # Main diagonal
+            for t in range(1, min(5, min(10 - i, 10 - j))):
+                if temp_board[i+t][j+t] != 0 and temp_board[i+t][j+t] != p+1:
+                    break
+                self.heuristic_1_table[p][i+t][j+t] = self.heuristic_1(temp_board, (i+t, j+t), p+1)
+            for t in range(1, min(5, min(i + 1, j + 1))):
+                if temp_board[i-t][j-t] != 0 and temp_board[i-t][j-t] != p+1:
+                    break
+                self.heuristic_1_table[p][i-t][j-t] = self.heuristic_1(temp_board, (i-t, j-t), p+1)
+        
+            # Antidiagonal
+            for t in range(1, min(5, min(10 - i, j + 1))):
+                if temp_board[i+t][j-t] != 0 and temp_board[i+t][j-t] != p+1:
+                    break
+                self.heuristic_1_table[p][i+t][j-t] = self.heuristic_1(temp_board, (i+t, j-t), p+1)
+            for t in range(1, min(5, min(i + 1, 10 - j))):
+                if temp_board[i-t][j+t] != 0 and temp_board[i-t][j+t] != p+1:
+                    break
+                self.heuristic_1_table[p][i-t][j+t] = self.heuristic_1(temp_board, (i-t, j+t), p+1)
+    
     def set_attributes(self, pos=None, old_card=None, new_card=None):
         p = self.player - 1
         n = self.num_players + 1
@@ -361,10 +516,35 @@ class SequenceEnv:
             self.attributes[p][n*96+old_card] -= 1
             if new_card is not None:
                 self.attributes[p][n*96+new_card] += 1
+            
+            for k in range(self.num_players):
+                self.attributes[k][n*96+50:] = self.heuristic_1_table[k].flatten()
 
         else:
             temp_board = self.discs_on_board.copy().flatten()
             temp_board = temp_board[temp_board != -1]
+
+            # Heuristic 1 in corners
+            heuristic_board = self.discs_on_board.copy()
+            
+            for i in range(self.num_players):
+                heuristic_board[0,0], heuristic_board[0,9], heuristic_board[9,0], heuristic_board[9,9] = [i+1]*4
+                for k in range(1, 5):
+                    self.heuristic_1_table[i][0,k] = self.heuristic_1(heuristic_board, (0,k), i+1)
+                    self.heuristic_1_table[i][k,0] = self.heuristic_1(heuristic_board, (k,0), i+1)
+                    self.heuristic_1_table[i][k,k] = self.heuristic_1(heuristic_board, (k,k), i+1)
+                    
+                    self.heuristic_1_table[i][0,9-k] = self.heuristic_1(heuristic_board, (0,9-k), i+1)
+                    self.heuristic_1_table[i][k,9] = self.heuristic_1(heuristic_board, (k,9), i+1)
+                    self.heuristic_1_table[i][k,9-k] = self.heuristic_1(heuristic_board, (k,9-k), i+1)
+                    
+                    self.heuristic_1_table[i][9,k] = self.heuristic_1(heuristic_board, (9,k), i+1)
+                    self.heuristic_1_table[i][9-k,0] = self.heuristic_1(heuristic_board, (9-k,0), i+1)
+                    self.heuristic_1_table[i][9-k,k] = self.heuristic_1(heuristic_board, (9-k,k), i+1)
+
+                    self.heuristic_1_table[i][9,9-k] = self.heuristic_1(heuristic_board, (9,9-k), i+1)
+                    self.heuristic_1_table[i][9-k,9] = self.heuristic_1(heuristic_board, (9-k,9), i+1)
+                    self.heuristic_1_table[i][9-k,9-k] = self.heuristic_1(heuristic_board, (9-k,9-k), i+1)
 
             attributes = []
             for i in range(self.num_players):
@@ -376,7 +556,7 @@ class SequenceEnv:
                 # Hönd
                 hond = np.zeros(50, dtype=np.uint8)
                 np.add.at(hond, self.hand[i], 1)
-                attributes.append(np.concatenate((one_hot_board, hond)))
+                attributes.append(np.concatenate((one_hot_board, hond, self.heuristic_1_table[i].flatten())))
 
                 # Sjónarhorn næsta leikmanns
                 temp_board[temp_board == 1] = self.num_players
@@ -389,33 +569,24 @@ class SequenceEnv:
         # Currently linear, can be changed to a neural network
         return np.dot(self.attributes[p], self.value_weights)
 
-    # printing the board is useful for debugging code...
-    def pretty_print(self):
-        color = ["", "*", "*", "*", "*"]
-        for i in range(10):
-            for j in range(10):
-                if (self.discs_on_board[i,j] <= 0):
-                    if self.cards_on_board[i, j] >= 0:
-                        print(self.the_cards[self.cards_on_board[i, j]], end=" ")
-                    else:
-                        print("-1", end=" ")
-                else:
-                    print(color[self.discs_on_board[i,j]] + str(self.discs_on_board[i,j]), end=" ")
-            print("")
-        for i in range(len(self.hand)):
-            print("player ", i + 1, "'s hand: ", [self.the_cards[j] for j in self.hand[i]], sep="")
-
     #naive test
     def play_full_game(self, policy="random", verbose=True):
         if isinstance(policy, str):
             policy = tuple([policy]*self.num_players)
         self.initialize_game()
+        self.heuristic_1_table = np.zeros((self.num_players, 10, 10))
         self.set_attributes()
         while not self.gameover:
             self.make_move(policy=policy, debug=verbose)
             if verbose:
-                plt.imshow(self.discs_on_board)
-                plt.colorbar()
+                fig, axes = plt.subplots(1, 3)
+                fig.set_size_inches(20, 6)
+                im = axes[0].imshow(self.discs_on_board)
+                fig.colorbar(im, ax=axes[0])
+                im = axes[1].imshow(self.heuristic_1_table[0])
+                fig.colorbar(im, ax=axes[1])
+                im = axes[2].imshow(self.heuristic_1_table[1])
+                fig.colorbar(im, ax=axes[2])
                 plt.show()
     
     def learn(self, policy="parametrized", alpha_w=0.001, alpha_theta=0.001, episodes=1000, verbose=True):
@@ -429,6 +600,8 @@ class SequenceEnv:
             print("[", end="")
         for i in range(episodes):
             self.initialize_game()
+
+            self.heuristic_1_table = np.zeros((self.num_players, 10, 10))
             
             self.set_attributes()
             while not self.gameover:
