@@ -394,7 +394,7 @@ class SequenceEnv:
     def get_policy(self, p):
         # State-policy function
         # Currently linear, can be changed to a neural network
-        return np.dot(self.attributes[p], self.value_policy)
+        return np.dot(self.attributes[p], self.policy_weights)
 
     # printing the board is useful for debugging code...
     def pretty_print(self):
@@ -427,6 +427,17 @@ class SequenceEnv:
                 plt.colorbar()
                 plt.show()
 
+    def update_weights(self, p, delta, alpha_w, alpha_theta):
+        self.value_weights += alpha_w * delta * self.attributes[p]
+        self.policy_weights += alpha_theta * delta * self.attributes[p]
+
+        # XX Athuga tilgang og betrumbætur: 
+        ss = np.sum(np.square(self.value_weights))
+        if ss > 1:
+            self.value_weights /= ss
+        ss = np.sum(np.square(self.policy_weights))
+        if ss > 1:
+            self.policy_weights /= ss
     
     def learn(self, policy="parametrized", alpha_w=0.001, epsilon=0.0, alpha_theta=0.001, episodes=1000, verbose=True):
         # Implements One-step Actor-Critic
@@ -454,7 +465,7 @@ class SequenceEnv:
                         delta = 1 - old_value
                 else:
                     delta = new_value - old_value
-                self.update_weights(delta, alpha_w, alpha_theta)
+                self.update_weights(p=p, delta=delta, alpha_w=alpha_w, alpha_theta=alpha_theta)
             wins[p] += 1
             if verbose:
                 while len(indices) > 0 and i == indices[0]:
@@ -464,14 +475,4 @@ class SequenceEnv:
             print("] Finished {} episodes".format(episodes))
         return wins
 
-    def self.update_weights(delta, alpha_w, alpha_theta):
-        self.value_weights += alpha_w * delta * self.attributes[p]
-        self.policy_weights += alpha_theta * delta * self.attributes[p]
-
-        # XX Athuga tilgang og betrumbætur: 
-        ss = np.sum(np.square(self.value_weights))
-        if ss > 1:
-            self.value_weights /= ss
-        ss = np.sum(np.square(self.policy_weights))
-        if ss > 1:
-            self.policy_weights /= ss
+    
