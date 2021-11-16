@@ -47,8 +47,8 @@ class SequenceEnv:
 
         # Some linear function approximators
         # Can be changed to neural networks
-        self.value_weights = np.zeros(self.attributes[0].size)
-        self.policy_weights = np.zeros(self.attributes[0].size)
+        self.value_weights = (np.random.rand(self.attributes[0].size)-0.5)/100    
+        self.policy_weights = (np.random.rand(self.attributes[0].size)-0.5)/100
 
     def initialize_game(self):
         self.gameover = False
@@ -208,7 +208,8 @@ class SequenceEnv:
         card_index = np.where(self.hand[p] == card)[0][0]
         self.hand[p][card_index] = self.sample_card()
         self.set_attributes(pos=pos, old_card=card, new_card=self.hand[p][card_index])
-        policy = np.dot(self.attributes[p], self.policy_weights)
+
+        policy = self.get_policy(p)
         value = self.get_value(p)
 
         # Reset state
@@ -325,6 +326,7 @@ class SequenceEnv:
         current_player = self.player
         self.player = current_player % self.num_players + 1
 
+    # Skil þetta ekki 100%
     def set_attributes(self, pos=None, old_card=None, new_card=None):
         p = self.player - 1
         n = self.num_players + 1
@@ -389,6 +391,11 @@ class SequenceEnv:
         # Currently linear, can be changed to a neural network
         return np.dot(self.attributes[p], self.value_weights)
 
+    def get_policy(self, p):
+        # State-policy function
+        # Currently linear, can be changed to a neural network
+        return np.dot(self.attributes[p], self.value_policy)
+
     # printing the board is useful for debugging code...
     def pretty_print(self):
         color = ["", "*", "*", "*", "*"]
@@ -408,17 +415,20 @@ class SequenceEnv:
     #naive test
     def play_full_game(self, policy="random", verbose=True):
         if isinstance(policy, str):
+            # hmm, breyta í numpy?
             policy = tuple([policy]*self.num_players)
-        self.initialize_game()
+        self.initialize_game() # Byrja alltaf upp á nýtt?
         self.set_attributes()
         while not self.gameover:
+            print(str(self.player))
             self.make_move(policy=policy, debug=verbose)
             if verbose:
                 plt.imshow(self.discs_on_board)
                 plt.colorbar()
                 plt.show()
+
     
-    def learn(self, policy="parametrized", alpha_w=0.001, alpha_theta=0.001, episodes=1000, verbose=True):
+    def learn(self, policy="parametrized", alpha_w=0.001, epsilon=0.0, alpha_theta=0.001, episodes=1000, verbose=True):
         # Implements One-step Actor-Critic
 
         if isinstance(policy, str):
@@ -434,7 +444,7 @@ class SequenceEnv:
             while not self.gameover:
                 p = self.player-1
                 old_value = self.get_value(p)
-                self.make_move(policy=policy, debug=False)
+                self.make_move(policy=policy, debug=False, epsilon=epsilon)
                 new_value = self.get_value(p)
                 delta = 0
                 if self.gameover:
@@ -444,14 +454,7 @@ class SequenceEnv:
                         delta = 1 - old_value
                 else:
                     delta = new_value - old_value
-                self.value_weights += alpha_w * delta * self.attributes[p]
-                self.policy_weights += alpha_theta * delta * self.attributes[p]
-                ss = np.sum(np.square(self.value_weights))
-                if ss > 1:
-                    self.value_weights /= ss
-                ss = np.sum(np.square(self.policy_weights))
-                if ss > 1:
-                    self.policy_weights /= ss
+                self.update_weights(delta, alpha_w, alpha_theta)
             wins[p] += 1
             if verbose:
                 while len(indices) > 0 and i == indices[0]:
@@ -460,3 +463,15 @@ class SequenceEnv:
         if verbose:
             print("] Finished {} episodes".format(episodes))
         return wins
+
+    def self.update_weights(delta, alpha_w, alpha_theta):
+        self.value_weights += alpha_w * delta * self.attributes[p]
+        self.policy_weights += alpha_theta * delta * self.attributes[p]
+
+        # XX Athuga tilgang og betrumbætur: 
+        ss = np.sum(np.square(self.value_weights))
+        if ss > 1:
+            self.value_weights /= ss
+        ss = np.sum(np.square(self.policy_weights))
+        if ss > 1:
+            self.policy_weights /= ss
