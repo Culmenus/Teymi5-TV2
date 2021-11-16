@@ -55,13 +55,23 @@ class SequenceEnv:
         self.policy_weights = np.zeros(self.attributes[0].size)
 
         # NN
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        self.alpha = [0.1, 0.001, 0.001]  # step size for PG and then each layer of the neural network
+        self.lmbda = 0.7
+        self.nx = self.attributes.size()
+        self.nh = self.nx // 2
+
         model = [None]*5
-        model[0] = Variable(torch.zeros((nh,1), device = device, dtype=torch.float), requires_grad = True)
-        model[1] = Variable(0.1*torch.randn(nh,nx, device = device, dtype=torch.float), requires_grad = True)
-        model[2] = Variable(torch.zeros((1,1), device = device, dtype=torch.float), requires_grad = True)
-        model[3] = Variable(0.1*torch.randn(1,nh, device = device, dtype=torch.float), requires_grad = True)
-        model[4] = Variable(0.1*torch.randn(1,nh, device = device, dtype=torch.float), requires_grad = True)
+        model[0] = Variable(torch.zeros((self.nh,1), device = self.device, dtype=torch.float), requires_grad = True)
+        model[1] = Variable(0.1*torch.randn(self.nh,self.nx, device = self.device, dtype=torch.float), requires_grad = True)
+        model[2] = Variable(torch.zeros((1,1), device = self.device, dtype=torch.float), requires_grad = True)
+        model[3] = Variable(0.1*torch.randn(1,self.nh, device = self.device, dtype=torch.float), requires_grad = True)
+        model[4] = Variable(0.1*torch.randn(1,self.nh, device = self.device, dtype=torch.float), requires_grad = True)
+
         
+    def load_model(self):
+        return
 
     def initialize_game(self):
         self.gameover = False
@@ -205,7 +215,7 @@ class SequenceEnv:
         else:
             return np.random.choice(self.deck)
 
-    def lookahead(self, pos, card, disc):
+    def lookahead_attributes(self, pos, card, disc):
         # One-step lookahead; finds afterstate value
         p = self.player - 1
         i, j = pos
@@ -215,19 +225,18 @@ class SequenceEnv:
         old_hand = self.hand[p].copy()
         old_attributes = self.attributes.copy()
 
-        # Update state and find value
+        # Update state
         self.discs_on_board[i,j] = disc
         card_index = np.where(self.hand[p] == card)[0][0]
         self.hand[p][card_index] = self.sample_card()
         self.set_attributes(pos=pos, old_card=card, new_card=self.hand[p][card_index])
-        policy = np.dot(self.attributes[p], self.policy_weights)
-        value = self.get_value(p)
+        attr = self.attributes.copy()
 
         # Reset state
         self.hand[p] = old_hand
         self.discs_on_board[i,j] = old_disc
         self.attributes = old_attributes
-        return policy, value
+        return attr
 
     def get_moves(self, debug=False):
         # legal moves for normal playing cards
@@ -286,15 +295,15 @@ class SequenceEnv:
                 values = []
                 for i in range(len(legal_moves)):
                     x, y = legal_moves[i]
-                    pol, val = self.lookahead(legal_moves[i], self.cards_on_board[x,y], self.player)
+                    pol, val = self.lookahead_attributes(legal_moves[i], self.cards_on_board[x,y], self.player)
                     policy_estimates.append(pol)
                     values.append(val)
                 for i in range(len(legal_moves_1J)):
-                    pol, val = self.lookahead(legal_moves_1J[i], 48, 0)
+                    pol, val = self.lookahead_attributes(legal_moves_1J[i], 48, 0)
                     policy_estimates.append(pol)
                     values.append(val)
                 for i in range(len(legal_moves_2J)):
-                    pol, val = self.lookahead(legal_moves_2J[i], 49, self.player)
+                    pol, val = self.lookahead_attributes(legal_moves_2J[i], 49, self.player)
                     policy_estimates.append(pol)
                     values.append(val)
                 policy_estimates = np.array(policy_estimates)

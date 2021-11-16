@@ -168,7 +168,7 @@ def competition(model, debug = False):
       discs_on_board[i,j] = disc_player[k] # here we actually update the board
       # now we need to draw a new card
       deck, hand[player-1] = drawCard(deck, hand[player-1], card_played[k])
-      # lets pretty print this new state og the game
+      # lets pretty print this new state and the game
       if debug:
         pretty_print(discs_on_board, hand)
     if (pass_move == n)  | (True == isTerminal(discs_on_board, player, n)):
