@@ -1,7 +1,8 @@
 # Leikmaðurinn hans Tómasar
 import numpy as np
 import matplotlib.pyplot as plt
-from numpy.lib.twodim_base import _histogram2d_dispatcher
+import torch
+from torch.autograd import Variable
 
 class SequenceEnv:
     def __init__(self, num_players = 2):
@@ -52,6 +53,15 @@ class SequenceEnv:
         # Can be changed to neural networks
         self.value_weights = np.zeros(self.attributes[0].size)
         self.policy_weights = np.zeros(self.attributes[0].size)
+
+        # NN
+        model = [None]*5
+        model[0] = Variable(torch.zeros((nh,1), device = device, dtype=torch.float), requires_grad = True)
+        model[1] = Variable(0.1*torch.randn(nh,nx, device = device, dtype=torch.float), requires_grad = True)
+        model[2] = Variable(torch.zeros((1,1), device = device, dtype=torch.float), requires_grad = True)
+        model[3] = Variable(0.1*torch.randn(1,nh, device = device, dtype=torch.float), requires_grad = True)
+        model[4] = Variable(0.1*torch.randn(1,nh, device = device, dtype=torch.float), requires_grad = True)
+        
 
     def initialize_game(self):
         self.gameover = False
