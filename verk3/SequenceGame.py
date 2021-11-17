@@ -28,7 +28,7 @@ class SequenceEnv:
                      'AS', '2S', '3S', '4S', '5S', '6S', '7S', '8S', '9S', '1S', 'QS', 'KS',
                      'AD', '2D', '3D', '4D', '5D', '6D', '7D', '8D', '9D', '1D', 'QD', 'KD',
                      'AH', '2H', '3H', '4H', '5H', '6H', '7H', '8H', '9H', '1H', 'QH', 'KH',
-                     '1J','2J']
+                     '1J', '2J']
 
         # Lookup table fyrir spilin
         self.card_positions = {}
@@ -377,7 +377,7 @@ class SequenceEnv:
 
         # Uppfæra hönd
         self.attributes[p][n*96+old_card] -= 1
-        if new_card is not None:
+        if new_card != -1:
             self.attributes[p][n*96+new_card] += 1
 
     def get_value(self, p):
