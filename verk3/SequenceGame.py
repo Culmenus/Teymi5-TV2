@@ -334,7 +334,7 @@ class SequenceEnv:
         for i in range(self.num_players):
             # One hot encoding á borði
             one_hot_board = np.zeros((temp_board.size, self.num_players + 1))
-            one_hot_board[np.arange(temp_board.size),temp_board] = 1
+            one_hot_board[np.arange(temp_board.size), temp_board] = 1
             one_hot_board = one_hot_board.flatten()
         
             # Hönd
@@ -400,6 +400,11 @@ class SequenceEnv:
             print("")
         for i in range(len(self.hand)):
             print("player ", i + 1, "'s hand: ", [self.the_cards[j] for j in self.hand[i]], sep="")
+            
+    def show_discs(self):
+        plt.imshow(self.discs_on_board)
+        plt.colorbar()
+        plt.show()
 
     #naive test
     def play_full_game(self, policy="random", verbose=True):
@@ -409,9 +414,7 @@ class SequenceEnv:
         while not self.gameover:
             self.make_move(policy=policy, debug=verbose)
             if verbose:
-                plt.imshow(self.discs_on_board)
-                plt.colorbar()
-                plt.show()
+                self.show_discs()
     
     def learn(self, policy="parametrized", alpha_w=0.001, alpha_theta=0.001, episodes=1000, verbose=True):
         # Implements One-step Actor-Critic
