@@ -113,7 +113,7 @@ def learnit(model, alpha = [0.1, 0.001, 0.001], epsilon = 0.0, debug = False):
   return model
 
 def competition(model, debug = False):
-  # random game player to the end!
+  # random game played to the end!
   n = 2 # number of players, they are numbered 1,2,3,4,...
   deck, hand, discs_on_board = initGame(n) # initial hand and empty discs on board!
   # lets get three types of legal moves, by normal playing cards, one-eyed Jacks (1J) and two-eyed Jacks (2J):
@@ -122,7 +122,7 @@ def competition(model, debug = False):
   pass_move = 0 # counts how many player in a row say pass!
   nx = discs_on_board.size*3+2
   if debug:
-    print("nx = ", nx)
+    print("nx =", nx)
   win = 0.5
   while True:
     legal_moves, legal_moves_1J, legal_moves_2J = getMoves(discs_on_board, hand, player)

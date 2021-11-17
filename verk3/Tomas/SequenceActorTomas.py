@@ -238,6 +238,26 @@ class SequenceEnv:
         self.attributes = old_attributes
         return attr
 
+    def softmax_policy(self, xa):
+        (nx, na) = xa.shape
+        x = Variable(torch.tensor(xa, dtype=torch.float, device=self.device))
+        
+        h = torch.mm(self.model[1], x) + self.model[0] @ torch.ones((1,na), device=self.device)
+        h_tanh = h.tanh()
+        y = torch.mm(self.model[3], h_tanh) + self.model[2]
+        va = y.sigmoid().detach()
+
+        pi = torch.mm(self.model[4], h_tanh).softmax(1)
+        m = torch.multinomial(pi, 1) # Softmax
+        # m = torch.argmax(pi) # Greedy
+        value = va.data[0,m]
+        advantage = value - torch.sum(pi * va)
+        xtheta_mean = torch.sum(torch.mm(h_tanh, torch.diagflat(pi)), 1)
+        h_tanh = torch.squeeze(h_tanh[:,m], 1)
+        grad_ln_pi = h_tanh.view(1, len(xtheta_mean)) - xtheta_mean.view(1, len(xtheta_mean))
+        x_selected = Variable(torch.tensor(xa[:,m], dtype=torch.float, device=self.device)).view(nx, 1)
+        return va, m, x_selected, grad_ln_pi, value, advantage.item()
+
     def get_moves(self, debug=False):
         # legal moves for normal playing cards
         iH = np.in1d(self.cards_on_board, self.hand[self.player - 1]).reshape(10, 10)  # check for cards in hand
@@ -291,29 +311,25 @@ class SequenceEnv:
                 k = np.random.choice(np.arange(len(all_moves)), 1)[0]
             elif policy[p] == "parametrized" or policy[p] == "epsilon_greedy":
                 # Find afterstate values
-                policy_estimates = []
-                values = []
+                x = np.zeros((len(self.nx, len(all_moves))))
+                t = 0
                 for i in range(len(legal_moves)):
                     x, y = legal_moves[i]
-                    pol, val = self.lookahead_attributes(legal_moves[i], self.cards_on_board[x,y], self.player)
-                    policy_estimates.append(pol)
-                    values.append(val)
+                    x[:,t] = self.lookahead_attributes(legal_moves[i], self.cards_on_board[x,y], self.player)
+                    t += 1
                 for i in range(len(legal_moves_1J)):
-                    pol, val = self.lookahead_attributes(legal_moves_1J[i], 48, 0)
-                    policy_estimates.append(pol)
-                    values.append(val)
+                    x[:,t] = self.lookahead_attributes(legal_moves_1J[i], 48, 0)
+                    t += 1
                 for i in range(len(legal_moves_2J)):
-                    pol, val = self.lookahead_attributes(legal_moves_2J[i], 49, self.player)
-                    policy_estimates.append(pol)
-                    values.append(val)
-                policy_estimates = np.array(policy_estimates)
+                    x[:,t] = self.lookahead_attributes(legal_moves_2J[i], 49, self.player)
+                    t += 1
                 if policy[p] == "epsilon_greedy":
-                    k = np.argmax(policy_estimates)
+                    # TODO
+                    pass
                 elif policy[p] == "parametrized":
                     # Linear softmax policy
-                    exp = np.exp(policy_estimates)
-                    probabilities = exp / np.sum(exp)
-                    k = np.random.choice(np.arange(len(probabilities)), p=probabilities)
+                    # TODO
+                    pass
             i, j = all_moves[k]
             if k < len1 or k >= len2:
                 disc = self.player
@@ -631,7 +647,6 @@ class SequenceEnv:
         # Currently linear, can be changed to a neural network
         return np.dot(self.attributes[p], self.value_weights)
 
-    #naive test
     def play_full_game(self, policy="random", verbose=True):
         if isinstance(policy, str):
             policy = tuple([policy]*self.num_players)
