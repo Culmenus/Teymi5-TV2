@@ -207,7 +207,7 @@ class SequenceEnv:
         self.discs_on_board[i,j] = disc
         card_index = np.where(self.hand[p] == card)[0][0]
         self.hand[p][card_index] = self.sample_card()
-        self.set_attributes(pos=pos, old_card=card, new_card=self.hand[p][card_index])
+        self.update_attributes(pos, old_card=card, new_card=self.hand[p][card_index])
         policy = np.dot(self.attributes[p], self.policy_weights)
         value = self.get_value(p)
 
@@ -309,7 +309,7 @@ class SequenceEnv:
             self.discs_on_board[i,j] = disc
             new_card = self.draw_card(played_card)
 
-            self.set_attributes(pos=(i,j), old_card=played_card, new_card=new_card)
+            self.update_attributes((i,j), old_card=played_card, new_card=new_card)
         else:
             self.no_feasible_move += 1
             if self.no_feasible_move == self.num_players:
@@ -325,64 +325,63 @@ class SequenceEnv:
         current_player = self.player
         self.player = current_player % self.num_players + 1
 
-    def set_attributes(self, pos=None, old_card=None, new_card=None):
+    def set_attributes(self):
+        temp_board = self.discs_on_board.copy().flatten()
+        temp_board = temp_board[temp_board != -1]
+
+        attributes = []
+        for i in range(self.num_players):
+            # One hot encoding á borði
+            one_hot_board = np.zeros((temp_board.size, self.num_players + 1))
+            one_hot_board[np.arange(temp_board.size),temp_board] = 1
+            one_hot_board = one_hot_board.flatten()
+        
+            # Hönd
+            hond = np.zeros(50, dtype=np.uint8)
+            np.add.at(hond, self.hand[i], 1)
+            attributes.append(np.concatenate((one_hot_board, hond)))
+
+            # Sjónarhorn næsta leikmanns
+            temp_board[temp_board == 1] = self.num_players
+            temp_board[temp_board != 0] -= 1
+    
+        self.attributes = np.array(attributes)
+
+    def update_attributes(self, pos, old_card, new_card=None):
         p = self.player - 1
         n = self.num_players + 1
 
-        if pos is not None:
-            # Uppfæra eftir leik; forðast óþarfa útreikninga
-            # Mjög „optimised“; ekki þægilegt að vinna með
-            # Pos: tuple (i, j); þar sem síðasti leikmaður lék
-            i, j = pos
+        # Uppfæra eftir leik; forðast óþarfa útreikninga
+        # Mjög „optimised“; ekki þægilegt að vinna með
+        # Pos: tuple (i, j); þar sem síðasti leikmaður lék
+        i, j = pos
 
-            # Staður í eigindavigri; nauðsynlegt að taka tillit til hornanna
-            attr_pos = n * (10*i + j - 1)
-            if i > 8:
-                attr_pos -= 2 * n
-            elif i > 0:
-                attr_pos -= n
+        # Staður í eigindavigri; nauðsynlegt að taka tillit til hornanna
+        attr_pos = n * (10*i + j - 1)
+        if i > 8:
+            attr_pos -= 2 * n
+        elif i > 0:
+            attr_pos -= n
 
-            # Uppfæra þann stað
-            disc = self.discs_on_board[i,j]
-            if disc == 0:
-                for k in range(self.num_players):
-                    new_attr = np.zeros(n)
-                    self.attributes[k][attr_pos:attr_pos+n] = new_attr
-            else:
-                for k in range(self.num_players):
-                    new_attr = np.zeros(n)
-                    new_attr[disc] = 1
-                    self.attributes[k][attr_pos:attr_pos+n] = new_attr
-                    disc -= 1
-                    if disc == 0:
-                        disc = self.num_players
-
-            # Uppfæra hönd
-            self.attributes[p][n*96+old_card] -= 1
-            if new_card is not None:
-                self.attributes[p][n*96+new_card] += 1
-
+        # Uppfæra þann stað
+        disc = self.discs_on_board[i,j]
+        if disc == 0:
+            for k in range(self.num_players):
+                new_attr = np.zeros(n)
+                self.attributes[k][attr_pos:attr_pos+n] = new_attr
         else:
-            temp_board = self.discs_on_board.copy().flatten()
-            temp_board = temp_board[temp_board != -1]
+            for k in range(self.num_players):
+                new_attr = np.zeros(n)
+                new_attr[disc] = 1
+                self.attributes[k][attr_pos:attr_pos+n] = new_attr
+                disc -= 1
+                if disc == 0:
+                    disc = self.num_players
 
-            attributes = []
-            for i in range(self.num_players):
-                # One hot encoding á borði
-                one_hot_board = np.zeros((temp_board.size, n))
-                one_hot_board[np.arange(temp_board.size),temp_board] = 1
-                one_hot_board = one_hot_board.flatten()
-            
-                # Hönd
-                hond = np.zeros(50, dtype=np.uint8)
-                np.add.at(hond, self.hand[i], 1)
-                attributes.append(np.concatenate((one_hot_board, hond)))
-
-                # Sjónarhorn næsta leikmanns
-                temp_board[temp_board == 1] = self.num_players
-                temp_board[temp_board != 0] -= 1
-        
-            self.attributes = np.array(attributes)
+        # Uppfæra hönd
+        self.attributes[p][n*96+old_card] -= 1
+        if new_card is not None:
+            self.attributes[p][n*96+new_card] += 1
 
     def get_value(self, p):
         # State-value function
