@@ -328,7 +328,7 @@ class SequenceEnv:
         self.player = current_player % self.num_players + 1
 
     def set_attributes(self):
-        temp_board = np.zeros(96)
+        temp_board = np.zeros(96, dtype=np.int8)
 
         attributes = []
         for i in range(self.num_players):
