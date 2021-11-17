@@ -62,6 +62,8 @@ class SequenceEnv:
         for i in range(self.num_players):
             self.hand.append(self.deck[:self.m[self.num_players]])  # deal player i m[n] cards
             self.deck = self.deck[self.m[self.num_players]:]  # remove cards from deck
+        
+        self.set_attributes()
 
     def is_terminal(self, i, j):
         # Checks whether the board is in a terminal state, given that
@@ -326,8 +328,7 @@ class SequenceEnv:
         self.player = current_player % self.num_players + 1
 
     def set_attributes(self):
-        temp_board = self.discs_on_board.copy().flatten()
-        temp_board = temp_board[temp_board != -1]
+        temp_board = np.zeros(96)
 
         attributes = []
         for i in range(self.num_players):
@@ -340,10 +341,6 @@ class SequenceEnv:
             hond = np.zeros(50, dtype=np.uint8)
             np.add.at(hond, self.hand[i], 1)
             attributes.append(np.concatenate((one_hot_board, hond)))
-
-            # Sjónarhorn næsta leikmanns
-            temp_board[temp_board == 1] = self.num_players
-            temp_board[temp_board != 0] -= 1
     
         self.attributes = np.array(attributes)
 
@@ -409,7 +406,6 @@ class SequenceEnv:
         if isinstance(policy, str):
             policy = tuple([policy]*self.num_players)
         self.initialize_game()
-        self.set_attributes()
         while not self.gameover:
             self.make_move(policy=policy, debug=verbose)
             if verbose:

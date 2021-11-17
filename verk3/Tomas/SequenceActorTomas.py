@@ -46,12 +46,6 @@ class SequenceEnv:
         self.heuristic_2_table = np.zeros((num_players, 10, 10))
 
         self.initialize_game() # So that all variables get initialized
-        self.set_attributes()
-
-        # Some linear function approximators
-        # Can be changed to neural networks
-        self.value_weights = np.zeros(self.attributes[0].size)
-        self.policy_weights = np.zeros(self.attributes[0].size)
 
         # NN
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -84,8 +78,7 @@ class SequenceEnv:
             self.hand.append(self.deck[:self.m[self.num_players]])  # deal player i m[n] cards
             self.deck = self.deck[self.m[self.num_players]:]  # remove cards from deck
         
-        self.heuristic_1_table = np.zeros((self.num_players, 10, 10))
-        self.heuristic_2_table = np.zeros((self.num_players, 10, 10))
+        self.set_attributes()
 
     def is_terminal(self, i, j):
         # Checks whether the board is in a terminal state, given that
@@ -263,6 +256,9 @@ class SequenceEnv:
         x_selected = Variable(torch.tensor(xa[:,m], dtype=torch.float, device=self.device)).view(nx, 1)
         return va, m, x_selected, grad_ln_pi, value, advantage.item()
 
+    def learn_step(self, grad_ln_pi, value, advantage):
+        return
+
     def get_moves(self, debug=False):
         # legal moves for normal playing cards
         iH = np.in1d(self.cards_on_board, self.hand[self.player - 1]).reshape(10, 10)  # check for cards in hand
@@ -295,7 +291,7 @@ class SequenceEnv:
             print()
         return legal_moves, legal_moves_1J, legal_moves_2J
     
-    def make_move(self, policy, epsilon=0.1):
+    def make_move(self, policy, epsilon=0.1, learn=False):
         legal_moves, legal_moves_1J, legal_moves_2J = self.get_moves()
         len1 = len(legal_moves)
         len2 = len1 + len(legal_moves_1J)
@@ -314,7 +310,7 @@ class SequenceEnv:
                     randomMove = True
             if policy[p] == "random" or randomMove:
                 k = np.random.choice(np.arange(len(all_moves)), 1)[0]
-            elif policy[p] == "parametrized" or policy[p] == "epsilon_greedy":
+            elif policy[p] == "softmax" or policy[p] == "epsilon_greedy":
                 # Find afterstate values
                 x = np.zeros((self.nx, len(all_moves)))
                 t = 0
@@ -330,13 +326,8 @@ class SequenceEnv:
                     t += 1
                 va, m, x_selected, grad_ln_pi, value, advantage = self.make_policy(x, policy)
                 k = m
-                if policy[p] == "epsilon_greedy":
-                    # TODO
-                    pass
-                elif policy[p] == "parametrized":
-                    # Linear softmax policy
-                    # TODO
-                    pass
+                if learn:
+                    self.learn_step(grad_ln_pi, value, advantage)
             i, j = all_moves[k]
             if k < len1 or k >= len2:
                 disc = self.player
@@ -353,14 +344,15 @@ class SequenceEnv:
             self.discs_on_board[i,j] = disc
             new_card = self.draw_card(played_card)
 
-            self.set_attributes(pos=(i,j), old_card=played_card, new_card=new_card)
+            self.update_attributes((i,j), played_card, new_card)
+            if disc > 0 and self.is_terminal(i, j):
+                self.gameover = True
+                return
         else:
             self.no_feasible_move += 1
             if self.no_feasible_move == self.num_players:
                 self.gameover = True
-        if disc > 0 and self.is_terminal(i, j):
-            self.gameover = True
-            return
+                return
 
         current_player = self.player
         self.player = current_player % self.num_players + 1
@@ -530,125 +522,109 @@ class SequenceEnv:
                     break
                 self.heuristic_1_table[p][i-t][j+t] = self.heuristic_1(temp_board, (i-t, j+t), p+1)
     
-    def set_attributes(self, pos=None, old_card=None, new_card=None):
+    def set_attributes(self):
+        temp_board = np.zeros(96, dtype=np.int8)
+
+        # Heuristic 1
+        self.heuristic_1_table = np.zeros((self.num_players, 10, 10))
+
+        for i in range(self.num_players):
+            for k in range(0, 9):
+                self.heuristic_1_table[i][0,k] = 1
+                self.heuristic_1_table[i][9,k] = 1
+
+                self.heuristic_1_table[i][k,0] = 1
+                self.heuristic_1_table[i][k,9] = 1
+                
+                self.heuristic_1_table[i][k,k] = 1
+                self.heuristic_1_table[i][k,9-k] = 1
+        
+        # Heuristic 2
+        self.heuristic_2_table = 0.1 + np.zeros((self.num_players, 10, 10))
+
+        for i in range(self.num_players):
+            for card in self.hand[i]:
+                if card < 48:
+                    self.heuristic_2_table[i][tuple(self.card_positions[card])] = 1
+
+        attributes = []
+        hf = np.multiply(self.heuristic_1_table, self.heuristic_2_table)
+        for i in range(self.num_players):
+            # One hot encoding á borði
+            one_hot_board = np.zeros((temp_board.size, self.num_players + 1))
+            one_hot_board[np.arange(temp_board.size),temp_board] = 1
+            one_hot_board = one_hot_board.flatten()
+        
+            # Hönd
+            hond = np.zeros(50, dtype=np.uint8)
+            np.add.at(hond, self.hand[i], 1)
+
+            mh1 = np.sum(self.heuristic_1_table[i]) / 100
+            mh2 = np.sum(np.square(self.heuristic_1_table[i])) / 100
+            mh3 = np.max(self.heuristic_1_table[i])
+            mh4 = np.sum(hf[i]) / 100
+            mh5 = np.sum(np.square(hf[i])) / 100
+            mh6 = np.max(hf[i])
+            meta_heuristics = np.array([mh1, mh2, mh3, mh4, mh5, mh6])
+
+            attributes.append(np.concatenate((one_hot_board, hond, self.heuristic_1_table[i].flatten(), meta_heuristics, [self.sequences[i]])))
+    
+        self.attributes = np.array(attributes)
+
+    def update_attributes(self, pos, old_card, new_card=None):
         p = self.player - 1
         n = self.num_players + 1
+        i, j = pos
 
-        if pos is not None:
-            # Uppfæra eftir leik; forðast óþarfa útreikninga
-            # Mjög „optimised“; ekki þægilegt að vinna með
-            # Pos: tuple (i, j); þar sem síðasti leikmaður lék
-            i, j = pos
+        # Staður í eigindavigri; nauðsynlegt að taka tillit til hornanna
+        attr_pos = n * (10*i + j - 1)
+        if i > 8:
+            attr_pos -= 2 * n
+        elif i > 0:
+            attr_pos -= n
 
-            # Staður í eigindavigri; nauðsynlegt að taka tillit til hornanna
-            attr_pos = n * (10*i + j - 1)
-            if i > 8:
-                attr_pos -= 2 * n
-            elif i > 0:
-                attr_pos -= n
-
-            # Uppfæra þann stað
-            disc = self.discs_on_board[i,j]
-            if disc == 0:
-                for k in range(self.num_players):
-                    new_attr = np.zeros(n)
-                    self.attributes[k][attr_pos:attr_pos+n] = new_attr
-            else:
-                for k in range(self.num_players):
-                    new_attr = np.zeros(n)
-                    new_attr[disc] = 1
-                    self.attributes[k][attr_pos:attr_pos+n] = new_attr
-                    disc -= 1
-                    if disc == 0:
-                        disc = self.num_players
-
-            # Uppfæra hönd
-            self.attributes[p][n*96+old_card] -= 1
-            if new_card is not None:
-                self.attributes[p][n*96+new_card] += 1
-            
-            # Heuristic 1
-            self.update_heuristic_1(pos)
-            
-            # Heuristic 2
+        # Uppfæra þann stað
+        disc = self.discs_on_board[i,j]
+        if disc == 0:
             for k in range(self.num_players):
-                self.heuristic_2_table[k][pos] = self.heuristic_2(pos, k)
-            
-            hf = np.multiply(self.heuristic_1_table, self.heuristic_2_table)
-            t = n * 96 + 50
-            for k in range(self.num_players):
-                self.attributes[k][t:t+100] = self.heuristic_1_table[k].flatten()
-            
-                mh1 = np.sum(self.heuristic_1_table[k]) / 100
-                mh2 = np.sum(np.square(self.heuristic_1_table[k])) / 100
-                mh3 = np.max(self.heuristic_1_table[k])
-                mh4 = np.sum(hf[k]) / 100
-                mh5 = np.sum(np.square(hf[k])) / 100
-                mh6 = np.max(hf[k])
-                meta_heuristics = np.array([mh1, mh2, mh3, mh4, mh5, mh6])
-
-                self.attributes[k][t+100:t+106] = meta_heuristics
-                self.attributes[k][t+106] = self.sequences[k]
-
+                new_attr = np.zeros(n)
+                self.attributes[k][attr_pos:attr_pos+n] = new_attr
         else:
-            # Assumes empty board
+            for k in range(self.num_players):
+                new_attr = np.zeros(n)
+                new_attr[disc] = 1
+                self.attributes[k][attr_pos:attr_pos+n] = new_attr
+                disc -= 1
+                if disc == 0:
+                    disc = self.num_players
 
-            temp_board = np.zeros(96, dtype=np.int8)
-
-            # Heuristic 1
-            self.heuristic_1_table = np.zeros((self.num_players, 10, 10))
-
-            for i in range(self.num_players):
-                for k in range(0, 9):
-                    self.heuristic_1_table[i][0,k] = 1
-                    self.heuristic_1_table[i][9,k] = 1
-
-                    self.heuristic_1_table[i][k,0] = 1
-                    self.heuristic_1_table[i][k,9] = 1
-                    
-                    self.heuristic_1_table[i][k,k] = 1
-                    self.heuristic_1_table[i][k,9-k] = 1
-            
-            # Heuristic 2
-            self.heuristic_2_table = 0.1 + np.zeros((self.num_players, 10, 10))
-
-            for i in range(self.num_players):
-                for card in self.hand[i]:
-                    if card < 48:
-                        self.heuristic_2_table[i][tuple(self.card_positions[card])] = 1
-
-            attributes = []
-            hf = np.multiply(self.heuristic_1_table, self.heuristic_2_table)
-            for i in range(self.num_players):
-                # One hot encoding á borði
-                one_hot_board = np.zeros((temp_board.size, n))
-                one_hot_board[np.arange(temp_board.size),temp_board] = 1
-                one_hot_board = one_hot_board.flatten()
-            
-                # Hönd
-                hond = np.zeros(50, dtype=np.uint8)
-                np.add.at(hond, self.hand[i], 1)
-
-                mh1 = np.sum(self.heuristic_1_table[i]) / 100
-                mh2 = np.sum(np.square(self.heuristic_1_table[i])) / 100
-                mh3 = np.max(self.heuristic_1_table[i])
-                mh4 = np.sum(hf[i]) / 100
-                mh5 = np.sum(np.square(hf[i])) / 100
-                mh6 = np.max(hf[i])
-                meta_heuristics = np.array([mh1, mh2, mh3, mh4, mh5, mh6])
-
-                attributes.append(np.concatenate((one_hot_board, hond, self.heuristic_1_table[i].flatten(), meta_heuristics, [self.sequences[i]])))
-
-                # Sjónarhorn næsta leikmanns
-                temp_board[temp_board == 1] = self.num_players
-                temp_board[temp_board != 0] -= 1
+        # Uppfæra hönd
+        self.attributes[p][n*96+old_card] -= 1
+        if new_card is not None:
+            self.attributes[p][n*96+new_card] += 1
         
-            self.attributes = np.array(attributes)
+        # Heuristic 1
+        self.update_heuristic_1(pos)
+        
+        # Heuristic 2
+        for k in range(self.num_players):
+            self.heuristic_2_table[k][pos] = self.heuristic_2(pos, k)
+        
+        hf = np.multiply(self.heuristic_1_table, self.heuristic_2_table)
+        t = n * 96 + 50
+        for k in range(self.num_players):
+            self.attributes[k][t:t+100] = self.heuristic_1_table[k].flatten()
+        
+            mh1 = np.sum(self.heuristic_1_table[k]) / 100
+            mh2 = np.sum(np.square(self.heuristic_1_table[k])) / 100
+            mh3 = np.max(self.heuristic_1_table[k])
+            mh4 = np.sum(hf[k]) / 100
+            mh5 = np.sum(np.square(hf[k])) / 100
+            mh6 = np.max(hf[k])
+            meta_heuristics = np.array([mh1, mh2, mh3, mh4, mh5, mh6])
 
-    def get_value(self, p):
-        # State-value function
-        # Currently linear, can be changed to a neural network
-        return np.dot(self.attributes[p], self.value_weights)
+            self.attributes[k][t+100:t+106] = meta_heuristics
+            self.attributes[k][t+106] = self.sequences[k]
 
     def play_full_game(self, policy="random", verbose=True):
         if isinstance(policy, str):
@@ -657,7 +633,7 @@ class SequenceEnv:
         self.heuristic_1_table = np.zeros((self.num_players, 10, 10))
         self.set_attributes()
         while not self.gameover:
-            self.make_move(policy=policy)
+            self.make_move(policy=policy, learn=False)
             if verbose:
                 fig, axes = plt.subplots(1, 3)
                 fig.set_size_inches(20, 6)
@@ -669,7 +645,7 @@ class SequenceEnv:
                 fig.colorbar(im, ax=axes[2])
                 plt.show()
     
-    def learn(self, policy="parametrized", epsilon=0.1, alpha_w=0.001, alpha_theta=0.001, episodes=1000, verbose=True):
+    def learn(self, policy="softmax", epsilon=0.1, alpha_w=0.001, alpha_theta=0.001, episodes=1000, verbose=True):
         # Implements Lambda Actor-Critic
 
         if isinstance(policy, str):
@@ -681,17 +657,14 @@ class SequenceEnv:
         for i in range(episodes):
             self.initialize_game()
 
-            self.heuristic_1_table = np.zeros((self.num_players, 10, 10))
-            
-            self.set_attributes()
             while not self.gameover:
                 p = self.player-1
-                self.make_move(policy=policy, epsilon=epsilon, debug=False)
+                self.make_move(policy=policy, epsilon=epsilon, learn=True)
             wins[p] += 1
             if verbose:
                 while len(indices) > 0 and i == indices[0]:
                     print('=', end='')
                     del(indices[0])
         if verbose:
-            print("] Finished {} episodes".format(episodes))
+            print(f"] Finished {episodes} episodes")
         return wins
