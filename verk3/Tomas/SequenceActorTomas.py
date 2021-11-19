@@ -5,15 +5,9 @@ import torch
 from torch.autograd import Variable
 
 class SequenceEnv:
-    def __init__(self, num_players = 2):
-        # some global variables used by the games, what we get in the box!
-        self.num_players = num_players
-        self.no_feasible_move = 0  # counts how many player in a row say pass!
-        # There are two decks of cards each with 48 unique cards if we remove the Jacks lets label them 0,...,47
-        # Let card 48 be one-eyed Jack and card 49 be two-eyed jack; there are 4 each of these
+    def __init__(self):
+        self.no_feasible_move = 0
         self.cards = np.hstack((np.arange(48), np.arange(48), 48, 48, 48, 48, 49, 49, 49, 49))
-        # now lets deal out the hand, each player gets m[n] cards
-        self.m = (None, None, 7, 6, 6)
 
         self.cards_on_board = np.matrix([[-1, 0, 11, 10, 9, 8, 7, 6, 5, -1],
                                     [24, 18, 19, 20, 21, 22, 23, 12, 4, 13],
@@ -42,19 +36,19 @@ class SequenceEnv:
         for i in range(12):
             self.card_positions[i] = tuple(self.card_positions[i])
         
-        self.heuristic_1_table = np.zeros((num_players, 10, 10))
-        self.heuristic_2_table = np.zeros((num_players, 10, 10))
+        self.heuristic_1_table = np.zeros((2, 10, 10))
+        self.heuristic_2_table = np.zeros((2, 10, 10))
 
-        self.initialize_game(init=True) # So that all variables get initialized
+        self.initialize_game(init=True)
 
         # NN
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        self.gamma = 1
+        self.gamma = 0.95
         self.alpha = [0.1, 0.001, 0.001]  # step size for PG and then each layer of the neural network
         self.lmbda = 0.7
         self.nx = self.attributes[0].size
-        self.nh = self.nx // 2
+        self.nh = self.nx * 2
 
         self.model = [None]*5
         self.model[0] = Variable(torch.zeros((self.nh,1), device = self.device, dtype=torch.float), requires_grad = True)
@@ -70,22 +64,23 @@ class SequenceEnv:
         self.gameover = False
         self.player = 1
         self.discs_on_board = np.zeros((10, 10), dtype='int8')
-        self.sequences = [0]*self.num_players
+        self.sequences = [0]*2
         self.sequence_discs = set()
         self.discs_on_board[np.ix_([0, 0, 9, 9], [0, 9, 0, 9])] = -1
         self.deck = self.cards[np.argsort(np.random.rand(104))]
         self.hand = []
-        for i in range(self.num_players):
-            self.hand.append(self.deck[:self.m[self.num_players]])  # deal player i m[n] cards
-            self.deck = self.deck[self.m[self.num_players]:]  # remove cards from deck
+        for i in range(2):
+            self.hand.append(self.deck[:7])  # deal player i m[n] cards
+            self.deck = self.deck[7:]  # remove cards from deck
         
         self.set_attributes()
+        self.old_value = [None, None]
 
         if not init:
-            self.Z_b1 = [torch.zeros(self.model[0].size(), device=self.device, dtype = torch.float) for i in range(self.num_players)]
-            self.Z_w1 = [torch.zeros(self.model[1].size(), device=self.device, dtype = torch.float) for i in range(self.num_players)]
-            self.Z_b2 = [torch.zeros(self.model[2].size(), device=self.device, dtype = torch.float) for i in range(self.num_players)]
-            self.Z_w2 = [torch.zeros(self.model[3].size(), device=self.device, dtype = torch.float) for i in range(self.num_players)]
+            self.Z_b1 = [torch.zeros(self.model[0].size(), device=self.device, dtype = torch.float) for i in range(2)]
+            self.Z_w1 = [torch.zeros(self.model[1].size(), device=self.device, dtype = torch.float) for i in range(2)]
+            self.Z_b2 = [torch.zeros(self.model[2].size(), device=self.device, dtype = torch.float) for i in range(2)]
+            self.Z_w2 = [torch.zeros(self.model[3].size(), device=self.device, dtype = torch.float) for i in range(2)]
 
     def is_terminal(self, i, j):
         # Checks whether the board is in a terminal state, given that
@@ -189,10 +184,7 @@ class SequenceEnv:
                 for k in range(1, t2+1):
                     self.sequence_discs.add((i-k, j+k))
 
-        if self.num_players == 2:
-            return self.sequences[p] > 1
-        else:
-            return self.sequences[p] > 0
+        return self.sequences[p] > 1
 
     def draw_card(self, card_played, debug=False):
         player_hand = self.hand[self.player-1]
@@ -205,16 +197,6 @@ class SequenceEnv:
         index = np.where(player_hand == card_played)[0][0]  # find location of card played in hand
         self.hand[self.player-1][index] = new_card  # replace the card played with a new one
         return new_card
-
-    def sample_card(self):
-        # Samples a card draw
-        # Adds some noise to the afterstate calculations,
-        # but can utilize card counting
-        # TODO: Laga
-        if self.deck.size == 0:
-            return -1
-        else:
-            return np.random.choice(self.deck)
 
     def lookahead_attributes(self, pos, card, disc):
         # One-step lookahead; finds afterstate value
@@ -229,7 +211,7 @@ class SequenceEnv:
         # Update state
         self.discs_on_board[i,j] = disc
         card_index = np.where(self.hand[p] == card)[0][0]
-        self.hand[p][card_index] = self.sample_card()
+        self.hand[p][card_index] = -1
         self.update_attributes(pos=pos, old_card=card, new_card=self.hand[p][card_index])
         attr = self.attributes[p].copy()
 
@@ -240,39 +222,34 @@ class SequenceEnv:
         return attr
 
     def make_policy(self, xa, policy):
-        (nx, na) = xa.shape
+        nx, na = xa.shape
         x = Variable(torch.tensor(xa, dtype=torch.float, device=self.device))
         
         h = torch.mm(self.model[1], x) + self.model[0] @ torch.ones((1,na), device=self.device)
         h_tanh = h.tanh()
-        y = torch.mm(self.model[3], h_tanh) + self.model[2]
-        va = y.sigmoid().detach()
+        # y = torch.mm(self.model[3], h_tanh) + self.model[2]
+        # va = y.sigmoid().detach()
 
         pi = torch.mm(self.model[4], h_tanh).softmax(1)
         if policy == 'softmax':
             m = torch.multinomial(pi, 1)
         elif policy == 'greedy':
             m = torch.argmax(pi)
-        else:
-            raise ValueError(f'Unknown policy: {policy}')
-        value = va.data[0,m]
-        advantage = value - torch.sum(pi * va)
-        xtheta_mean = torch.sum(torch.mm(h_tanh, torch.diagflat(pi)), 1)
+        # value = va.data[0,m]
+        # advantage = value - torch.sum(pi * va)
+        # xtheta_mean = torch.sum(torch.mm(h_tanh, torch.diagflat(pi)), 1)
         # h_tanh = torch.squeeze(h_tanh[:,[m]], 1)
-        h_tanh = h_tanh[:,[m]]
-        grad_ln_pi = h_tanh.view(1, len(xtheta_mean)) - xtheta_mean.view(1, len(xtheta_mean))
+        # h_tanh = h_tanh[:,[m]]
+        # grad_ln_pi = h_tanh.view(1, len(xtheta_mean)) - xtheta_mean.view(1, len(xtheta_mean))
         # x_selected = Variable(torch.tensor(xa[:,m], dtype=torch.float, device=self.device)).view(nx, 1)
-        return m, grad_ln_pi, value, advantage.item(), h_tanh
+        return m
 
-    def learn_step(self, grad_ln_pi, value, advantage, h_tanh, reward):
-        # pi: 4 ??
-        p = self.player - 1
-        # print(self.model[3])
-        # print(h_tanh)
-        y = torch.mm(self.model[3], h_tanh) + self.model[2] # multiply with the output weights self.model[3] and add bias
-        y_sigmoid = y.sigmoid() # squash the output
+    def learn_step(self, p, grad_ln_pi, value, advantage, h_tanh, reward):
+        # y = torch.mm(self.model[3], h_tanh) + self.model[2] # multiply with the output weights self.model[3] and add bias
+        # y_sigmoid = y.sigmoid() # squash the output
         # now compute all gradients
-        y_sigmoid.backward()
+        # y_sigmoid.backward()
+        self.old_value[1].backward()
         # update the eligibility traces using the gradients
         self.Z_b1[p] = self.gamma * self.lmbda * self.Z_b1[p] + self.model[0].grad.data
         self.Z_w1[p] = self.gamma * self.lmbda * self.Z_w1[p] + self.model[1].grad.data
@@ -284,14 +261,14 @@ class SequenceEnv:
         self.model[2].grad.data.zero_()
         self.model[3].grad.data.zero_()
         # perform now the update for the weights
-        delta = reward + self.gamma * value - y_sigmoid.detach() # this is the usual TD error
+        delta = reward + self.gamma * value - self.old_value[1].detach()
         delta = torch.tensor(delta, dtype = torch.float, device=self.device)
-        self.model[0].data = self.model[0].data + self.alpha[1] * delta * self.Z_b1[p]
-        self.model[1].data = self.model[1].data + self.alpha[1] * delta * self.Z_w1[p] # may want to use different alpha for different layers!
-        self.model[2].data = self.model[2].data + self.alpha[2] * delta * self.Z_b2[p]
-        self.model[3].data = self.model[3].data + self.alpha[2] * delta * self.Z_w2[p]
+        self.model[0].data += self.alpha[1] * delta * self.Z_b1[p]
+        self.model[1].data += self.alpha[1] * delta * self.Z_w1[p]
+        self.model[2].data += self.alpha[2] * delta * self.Z_b2[p]
+        self.model[3].data += self.alpha[2] * delta * self.Z_w2[p]
 
-    def get_moves(self, debug=False):
+    def get_moves(self):
         # legal moves for normal playing cards
         iH = np.in1d(self.cards_on_board, self.hand[self.player - 1]).reshape(10, 10)  # check for cards in hand
         iA = (self.discs_on_board == 0) # there is no disc blocking
@@ -302,10 +279,9 @@ class SequenceEnv:
         if 48 in self.hand[self.player-1]:
             legal_moves_1J = []
             temp_legal_moves_1J = np.argwhere((self.discs_on_board != -1) & (self.discs_on_board != 0) & (self.discs_on_board != self.player))
-            if self.num_players == 2:
-                for i in temp_legal_moves_1J:
-                    if tuple(i) not in self.sequence_discs:
-                        legal_moves_1J.append(i)
+            for i in temp_legal_moves_1J:
+                if tuple(i) not in self.sequence_discs:
+                    legal_moves_1J.append(i)
             legal_moves_1J = np.array(legal_moves_1J)
             if legal_moves_1J.size == 0:
                 legal_moves_1J = np.array([]).reshape(0, 2)
@@ -317,8 +293,8 @@ class SequenceEnv:
         else:
             legal_moves_2J = np.array([]).reshape(0, 2)
         return legal_moves, legal_moves_1J, legal_moves_2J
-    
-    def make_move(self, policy, learn=False):
+
+    def make_random_move(self):
         legal_moves, legal_moves_1J, legal_moves_2J = self.get_moves()
         len1 = len(legal_moves)
         len2 = len1 + len(legal_moves_1J)
@@ -326,29 +302,9 @@ class SequenceEnv:
         played_card = 0
         disc = -1
         i, j = 0, 0
-        p = self.player - 1
         if len(all_moves) > 0:
             self.no_feasible_move = 0
-            k = 0
-            grad_ln_pi, value, advantage, h_tanh = [0]*4
-            if policy[p] == 'random':
-                k = np.random.choice(np.arange(len(all_moves)), 1)[0]
-            elif policy[p] == 'softmax' or policy[p] == 'greedy':
-                # Find afterstate values
-                x = np.zeros((self.nx, len(all_moves)))
-                t = 0
-                for i in range(len(legal_moves)):
-                    x1, x2 = legal_moves[i]
-                    x[:,t] = self.lookahead_attributes(legal_moves[i], self.cards_on_board[x1,x2], self.player)
-                    t += 1
-                for i in range(len(legal_moves_1J)):
-                    x[:,t] = self.lookahead_attributes(legal_moves_1J[i], 48, 0)
-                    t += 1
-                for i in range(len(legal_moves_2J)):
-                    x[:,t] = self.lookahead_attributes(legal_moves_2J[i], 49, self.player)
-                    t += 1
-                m, grad_ln_pi, value, advantage, h_tanh = self.make_policy(x, policy[p])
-                k = m
+            k = np.random.choice(np.arange(len(all_moves)), 1)[0]
             i, j = all_moves[k]
             if k < len1 or k >= len2:
                 disc = self.player
@@ -361,12 +317,6 @@ class SequenceEnv:
             else:
                 played_card = 49
 
-            if learn and not policy[p] == 'random':
-                if self.is_terminal(i, j):
-                    self.learn_step(grad_ln_pi, value, advantage, h_tanh, 1)
-                else:
-                    self.learn_step(grad_ln_pi, value, advantage, h_tanh, 0)
-
             # Update board, hand, and attributes
             self.discs_on_board[i,j] = disc
             new_card = self.draw_card(played_card)
@@ -377,12 +327,70 @@ class SequenceEnv:
                 return
         else:
             self.no_feasible_move += 1
-            if self.no_feasible_move == self.num_players:
+            if self.no_feasible_move == 2:
                 self.gameover = True
                 return
 
-        current_player = self.player
-        self.player = current_player % self.num_players + 1
+        self.player = 3 - self.player
+
+    def make_move(self, policy):
+        legal_moves, legal_moves_1J, legal_moves_2J = self.get_moves()
+        len1 = len(legal_moves)
+        len2 = len1 + len(legal_moves_1J)
+        all_moves = np.concatenate((legal_moves, legal_moves_1J, legal_moves_2J)).astype(np.int8)
+        played_card = 0
+        disc = -1
+        i, j = 0, 0
+        p = self.player - 1
+        if len(all_moves) > 0:
+            self.no_feasible_move = 0
+            # Find afterstate values
+            x = np.zeros((self.nx, len(all_moves)))
+            t = 0
+            for i in range(len(legal_moves)):
+                x1, x2 = legal_moves[i]
+                x[:,t] = self.lookahead_attributes(legal_moves[i], self.cards_on_board[x1,x2], self.player)
+                t += 1
+            for i in range(len(legal_moves_1J)):
+                x[:,t] = self.lookahead_attributes(legal_moves_1J[i], 48, 0)
+                t += 1
+            for i in range(len(legal_moves_2J)):
+                x[:,t] = self.lookahead_attributes(legal_moves_2J[i], 49, self.player)
+                t += 1
+
+            m, grad_ln_pi, value, advantage, h_tanh = self.make_policy(x, policy[p])
+            k = m
+            i, j = all_moves[k]
+            if k < len1 or k >= len2:
+                disc = self.player
+            else:
+                disc = 0
+            if k < len1:
+                played_card = self.cards_on_board[i,j]
+            elif k < len2:
+                played_card = 48
+            else:
+                played_card = 49
+
+            if self.is_terminal(i, j):
+                self.learn_step(grad_ln_pi, value, advantage, h_tanh, 1)
+                self.gameover = True
+                return
+            else:
+                self.learn_step(grad_ln_pi, value, advantage, h_tanh, 0)
+
+            # Update board, hand, and attributes
+            self.discs_on_board[i,j] = disc
+            new_card = self.draw_card(played_card)
+
+            self.update_attributes((i,j), played_card, new_card)
+        else:
+            self.no_feasible_move += 1
+            if self.no_feasible_move == 2:
+                self.gameover = True
+                return
+
+        self.player = 3 - self.player
 
     def heuristic_1(self, temp_board, pos, p):
         # Namminamm
@@ -500,13 +508,13 @@ class SequenceEnv:
         temp_board = self.discs_on_board.copy()
 
         if temp_board[i,j] != 0:
-            for p in range(self.num_players):
-                self.heuristic_1_table[p][i,j] = 0
+            self.heuristic_1_table[0][i,j] = 0
+            self.heuristic_1_table[1][i,j] = 0
         else:
-            for p in range(self.num_players):
-                self.heuristic_1_table[p][i,j] = self.heuristic_1(temp_board, (i, j), p+1)
+            self.heuristic_1_table[0][i,j] = self.heuristic_1(temp_board, (i, j), 1)
+            self.heuristic_1_table[1][i,j] = self.heuristic_1(temp_board, (i, j), 2)
 
-        for p in range(self.num_players):
+        for p in range(2):
             temp_board[0,0], temp_board[0,9], temp_board[9,0], temp_board[9,9] = [p+1]*4
             # Horizontal
             for t in range(1, min(5, 10 - j)):
@@ -552,9 +560,9 @@ class SequenceEnv:
         temp_board = np.zeros(96, dtype=np.int8)
 
         # Heuristic 1
-        self.heuristic_1_table = np.zeros((self.num_players, 10, 10))
+        self.heuristic_1_table = np.zeros((2, 10, 10))
 
-        for i in range(self.num_players):
+        for i in range(2):
             for k in range(0, 9):
                 self.heuristic_1_table[i][0,k] = 1
                 self.heuristic_1_table[i][9,k] = 1
@@ -566,18 +574,18 @@ class SequenceEnv:
                 self.heuristic_1_table[i][k,9-k] = 1
         
         # Heuristic 2
-        self.heuristic_2_table = 0.1 + np.zeros((self.num_players, 10, 10))
+        self.heuristic_2_table = 0.1 + np.zeros((2, 10, 10))
 
-        for i in range(self.num_players):
+        for i in range(2):
             for card in self.hand[i]:
                 if card < 48:
                     self.heuristic_2_table[i][tuple(self.card_positions[card])] = 1
 
         attributes = []
         hf = np.multiply(self.heuristic_1_table, self.heuristic_2_table)
-        for i in range(self.num_players):
+        for i in range(2):
             # One hot encoding á borði
-            one_hot_board = np.zeros((temp_board.size, self.num_players + 1))
+            one_hot_board = np.zeros((temp_board.size, 2 + 1))
             one_hot_board[np.arange(temp_board.size),temp_board] = 1
             one_hot_board = one_hot_board.flatten()
         
@@ -597,48 +605,47 @@ class SequenceEnv:
     
         self.attributes = np.array(attributes)
 
-    def update_attributes(self, pos, old_card, new_card=None):
+    def update_attributes(self, pos, old_card, new_card):
         p = self.player - 1
-        n = self.num_players + 1
         i, j = pos
 
         # Staður í eigindavigri; nauðsynlegt að taka tillit til hornanna
-        attr_pos = n * (10*i + j - 1)
+        attr_pos = 3 * (10*i + j - 1)
         if i > 8:
-            attr_pos -= 2 * n
+            attr_pos -= 6
         elif i > 0:
-            attr_pos -= n
+            attr_pos -= 3
 
         # Uppfæra þann stað
         disc = self.discs_on_board[i,j]
         if disc == 0:
-            for k in range(self.num_players):
-                new_attr = np.zeros(n)
-                self.attributes[k][attr_pos:attr_pos+n] = new_attr
+            for k in range(2):
+                new_attr = np.zeros(3)
+                self.attributes[k][attr_pos:attr_pos+3] = new_attr
         else:
-            for k in range(self.num_players):
-                new_attr = np.zeros(n)
+            for k in range(2):
+                new_attr = np.zeros(3)
                 new_attr[disc] = 1
-                self.attributes[k][attr_pos:attr_pos+n] = new_attr
+                self.attributes[k][attr_pos:attr_pos+3] = new_attr
                 disc -= 1
                 if disc == 0:
-                    disc = self.num_players
+                    disc = 2
 
         # Uppfæra hönd
-        self.attributes[p][n*96+old_card] -= 1
+        self.attributes[p][288+old_card] -= 1
         if new_card != -1:
-            self.attributes[p][n*96+new_card] += 1
+            self.attributes[p][288+new_card] += 1
         
         # Heuristic 1
         self.update_heuristic_1(pos)
         
         # Heuristic 2
-        for k in range(self.num_players):
+        for k in range(2):
             self.heuristic_2_table[k][pos] = self.heuristic_2(pos, k)
         
         hf = np.multiply(self.heuristic_1_table, self.heuristic_2_table)
-        t = n * 96 + 50
-        for k in range(self.num_players):
+        t = 338
+        for k in range(2):
             self.attributes[k][t:t+100] = self.heuristic_1_table[k].flatten()
         
             mh1 = np.sum(self.heuristic_1_table[k]) / 100
@@ -654,12 +661,10 @@ class SequenceEnv:
 
     def play_full_game(self, policy='random', verbose=True):
         if isinstance(policy, str):
-            policy = tuple([policy]*self.num_players)
+            policy = tuple([policy]*2)
         self.initialize_game()
-        self.heuristic_1_table = np.zeros((self.num_players, 10, 10))
-        self.set_attributes()
         while not self.gameover:
-            self.make_move(policy=policy, learn=False)
+            self.make_random_move()
             if verbose:
                 fig, axes = plt.subplots(1, 3)
                 fig.set_size_inches(20, 6)
@@ -675,8 +680,8 @@ class SequenceEnv:
         # Implements Lambda Actor-Critic
 
         if isinstance(policy, str):
-            policy = tuple([policy]*self.num_players)
-        wins = [0]*self.num_players
+            policy = (policy, policy)
+        wins = [0, 0]
         if verbose:
             indices = [(i * episodes) //  20 for i in range(20)]
             print('[', end='')
@@ -684,9 +689,8 @@ class SequenceEnv:
             self.initialize_game()
 
             while not self.gameover:
-                p = self.player-1
-                self.make_move(policy=policy, learn=True)
-            wins[p] += 1
+                self.make_move(policy=policy)
+            wins[self.player-1] += 1
             if verbose:
                 while len(indices) > 0 and i == indices[0]:
                     print('=', end='')
