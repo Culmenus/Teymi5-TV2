@@ -1,6 +1,7 @@
 from PIL.Image import new
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
 
 class SequenceEnv:
 
@@ -49,6 +50,9 @@ class SequenceEnv:
         # Can be changed to neural networks
         self.value_weights = (np.random.rand(self.attributes[0].size)-0.5)/100    
         self.policy_weights = (np.random.rand(self.attributes[0].size)-0.5)/100
+
+        self.W = torch.tensor(self.value_weights, dtype=torch.float32, requires_grad = True)
+        #self.Theta = self.W
 
     def initialize_game(self):
         self.gameover = False
@@ -210,7 +214,8 @@ class SequenceEnv:
         self.set_attributes(pos=pos, old_card=card, new_card=self.hand[p][card_index])
 
         policy = self.get_policy(p)
-        value = self.get_value(p)
+        #value = self.get_value(p)
+        value = self.value_forward(p)
 
         # Reset state
         self.hand[p] = old_hand
@@ -396,6 +401,33 @@ class SequenceEnv:
         # Currently linear, can be changed to a neural network
         return np.dot(self.attributes[p], self.policy_weights)
 
+    def value_forward(self, p):
+        return torch.dot(torch.tensor(self.attributes[p], dtype=torch.float32), self.W).requires_grad_(True)
+
+    def loss(self, R, new, old):
+        return R + new - old
+
+    def update_weights(self, p, delta, alpha_w, alpha_theta):
+        delta.backward()
+        #print(type(self.W.grad))
+        #print(delta, self.W, self.W.grad, sep="\n\n")
+        with torch.no_grad():
+            self.W = self.W +alpha_w * delta * self.W.grad
+        #upd = self.W.grad
+        #self.W = self.W + alpha_w * upd
+        self.value_weights += alpha_w * delta.detach().numpy() * self.attributes[p]
+        self.policy_weights += alpha_theta * delta.detach().numpy() * self.attributes[p]
+        #self.W.grad = torch.zeros(self.W.shape)
+        #delta.zero_grad()
+        
+        # XX Athuga tilgang og betrumbætur: 
+        """ ss = np.sum(np.square(self.value_weights))
+        if ss > 1:
+            self.value_weights /= ss
+        ss = np.sum(np.square(self.policy_weights))
+        if ss > 1:
+            self.policy_weights /= ss """
+
     # printing the board is useful for debugging code...
     def pretty_print(self):
         color = ["", "*", "*", "*", "*"]
@@ -426,18 +458,6 @@ class SequenceEnv:
                 plt.imshow(self.discs_on_board)
                 plt.colorbar()
                 plt.show()
-
-    def update_weights(self, p, delta, alpha_w, alpha_theta):
-        self.value_weights += alpha_w * delta * self.attributes[p]
-        self.policy_weights += alpha_theta * delta * self.attributes[p]
-
-        # XX Athuga tilgang og betrumbætur: 
-        ss = np.sum(np.square(self.value_weights))
-        if ss > 1:
-            self.value_weights /= ss
-        ss = np.sum(np.square(self.policy_weights))
-        if ss > 1:
-            self.policy_weights /= ss
     
     def learn(self, policy="parametrized", alpha_w=0.001, epsilon=0.0, alpha_theta=0.001, episodes=1000, verbose=True):
         # Implements One-step Actor-Critic
@@ -452,20 +472,37 @@ class SequenceEnv:
             self.initialize_game()
             
             self.set_attributes()
+            First = True
             while not self.gameover:
                 p = self.player-1
-                old_value = self.get_value(p)
+                #old_value = self.get_value(p)
+                old_value = self.value_forward(p)
                 self.make_move(policy=policy, debug=False, epsilon=epsilon)
-                new_value = self.get_value(p)
-                delta = 0
+                #new_value = self.get_value(p)
+                new_value = self.value_forward(p)
+                #delta = 0
+                #R = 0
                 if self.gameover:
+                    new_value = 0
                     if self.no_feasible_move:
-                        delta = 0.5 - old_value
+                        R = 0.5
                     else:
-                        delta = 1 - old_value
+                        R = 1
                 else:
-                    delta = new_value - old_value
+                    R = 0
+                
+                delta = self.loss(R, new_value, old_value)
+                """ if First:
+                    delta.backward(retain_graph=True)
+                    First = False
+                else:
+                    delta.backward() """
+                print(R, new_value, old_value)
+                print(type(self.W.grad))
                 self.update_weights(p=p, delta=delta, alpha_w=alpha_w, alpha_theta=alpha_theta)
+                print(R, new_value, old_value)
+                print(type(self.W.grad))
+                #self.W.grad.zero_()
             wins[p] += 1
             if verbose:
                 while len(indices) > 0 and i == indices[0]:
