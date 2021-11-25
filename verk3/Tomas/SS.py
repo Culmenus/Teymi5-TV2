@@ -1,7 +1,7 @@
 # Leikmaðurinn hans Tómasar
 import numpy as np
-import matplotlib.pyplot as plt
 import torch
+from torch._C import dtype
 from torch.autograd import Variable
 
 class SequenceEnv:
@@ -38,7 +38,16 @@ class SequenceEnv:
         self.model[3] = Variable(0.1*torch.randn(1,self.nh, device = self.device, dtype=torch.float), requires_grad = True)
 
     def load_model(self):
-        return
+        self.model[0] = torch.load('./b1_trained.pth')
+        self.model[1] = torch.load('./w1_trained.pth')
+        self.model[2] = torch.load('./b2_trained.pth')
+        self.model[3] = torch.load('./w2_trained.pth')
+
+    def save_model(self):
+        torch.save(self.model[0], './b1_trained.pth')
+        torch.save(self.model[1], './w1_trained.pth')
+        torch.save(self.model[2], './b2_trained.pth')
+        torch.save(self.model[3], './w2_trained.pth')
 
     def initialize_game(self, init=False):
         self.player = 1
@@ -49,8 +58,8 @@ class SequenceEnv:
         self.deck = self.cards[np.argsort(np.random.rand(104))]
         self.hand = []
         for i in range(2):
-            self.hand.append(self.deck[:7])  # deal player i m[n] cards
-            self.deck = self.deck[7:]  # remove cards from deck
+            self.hand.append(self.deck[:7])
+            self.deck = self.deck[7:]
 
         self.set_attributes()
         self.old_value = [None, None]
@@ -61,11 +70,15 @@ class SequenceEnv:
             self.Z_b2 = [torch.zeros(self.model[2].size(), device=self.device, dtype = torch.float) for i in range(2)]
             self.Z_w2 = [torch.zeros(self.model[3].size(), device=self.device, dtype = torch.float) for i in range(2)]
 
-    def is_terminal(self, i, j):
-        # Checks whether the board is in a terminal state, given that
+    def is_terminal(self):
+        return self.sequences[0] > 1 or self.sequences[1] > 1
+
+    def update_sequences(self, i, j):
+        # Updates a set containing the positions of all
+        # discs which are part of a sequence, given that
         # the last move was played in position (i, j)
-        # Additionally updates a set containing the positions of all
-        # discs which are part of a sequence.
+        if self.discs_on_board[i,j] == 0:
+            return
         p = self.player - 1
 
         temp_board = self.discs_on_board.copy()
@@ -84,7 +97,8 @@ class SequenceEnv:
         if t >= 4:
             self.sequence_discs.add((i, j))
             if t >= 8:
-                return True
+                self.sequences[p] = 2
+                return
             if t1 < 5 and t2 < 5:
                 self.sequences[p] += 1
             if t2 < 5:
@@ -107,7 +121,8 @@ class SequenceEnv:
         if t >= 4:
             self.sequence_discs.add((i, j))
             if t >= 8:
-                return True
+                self.sequences[p] = 2
+                return
             if t1 < 5 and t2 < 5:
                 self.sequences[p] += 1
             if t2 < 5:
@@ -130,7 +145,8 @@ class SequenceEnv:
         if t >= 4:
             self.sequence_discs.add((i, j))
             if t >= 8:
-                return True
+                self.sequences[p] = 2
+                return
             if t1 < 5 and t2 < 5:
                 self.sequences[p] += 1
             if t2 < 5:
@@ -153,7 +169,8 @@ class SequenceEnv:
         if t >= 4:
             self.sequence_discs.add((i, j))
             if t >= 8:
-                return True
+                self.sequences[p] = 2
+                return
             if t1 < 5 and t2 < 5:
                 self.sequences[p] += 1
             if t2 < 5:
@@ -163,9 +180,7 @@ class SequenceEnv:
                 for k in range(1, t2+1):
                     self.sequence_discs.add((i-k, j+k))
 
-        return self.sequences[p] > 1
-
-    def draw_card(self, card_played, debug=False):
+    def draw_card(self, card_played):
         player_hand = self.hand[self.player-1]
         # remove card played from hand
         if len(self.deck) > 0:
@@ -185,18 +200,22 @@ class SequenceEnv:
         # Cache current state
         old_disc = self.discs_on_board[i,j]
         old_hand = self.hand[p].copy()
+        old_sequence_discs = self.sequence_discs.copy()
+        old_sequences = self.sequences.copy()
         old_attributes = self.attributes.copy()
 
         # Update state
         self.discs_on_board[i,j] = disc
-        card_index = np.where(self.hand[p] == card)[0][0]
-        self.hand[p][card_index] = -1
-        self.update_attributes(pos=pos, old_card=card, new_card=self.hand[p][card_index])
+        self.update_sequences(i, j)
+
+        self.update_attributes(pos=pos, old_card=card, new_card=-1)
         attr = self.attributes[p].copy()
 
         # Reset state
         self.hand[p] = old_hand
         self.discs_on_board[i,j] = old_disc
+        self.sequence_discs = old_sequence_discs
+        self.sequences = old_sequences
         self.attributes = old_attributes
         return attr
 
@@ -230,7 +249,7 @@ class SequenceEnv:
         #     legal_moves_1J = np.argwhere((self.discs_on_board != -1) & (self.discs_on_board != 0) & (self.discs_on_board != self.player))
         if 48 in self.hand[self.player-1]:
             legal_moves_1J = []
-            temp_legal_moves_1J = np.argwhere((self.discs_on_board != -1) & (self.discs_on_board != 0) & (self.discs_on_board != self.player))
+            temp_legal_moves_1J = np.argwhere(self.discs_on_board == (3 - self.player))
             for i in temp_legal_moves_1J:
                 if tuple(i) not in self.sequence_discs:
                     legal_moves_1J.append(i)
@@ -271,10 +290,11 @@ class SequenceEnv:
 
             # Update board, hand, and attributes
             self.discs_on_board[i,j] = disc
+            self.update_sequences(i, j)
             new_card = self.draw_card(played_card)
 
             self.update_attributes((i,j), played_card, new_card)
-            if disc > 0 and self.is_terminal(i, j):
+            if self.is_terminal():
                 return self.player
         else:
             self.no_feasible_move += 1
@@ -308,9 +328,8 @@ class SequenceEnv:
                 x[:,t] = self.lookahead_attributes(legal_moves_2J[i], 49, self.player)
                 t += 1
 
-            nx, na = x.shape
             x = Variable(torch.tensor(x, dtype=torch.float, device=self.device))
-            h = torch.mm(self.model[1], x) + self.model[0] @ torch.ones((1,na), device=self.device)
+            h = torch.mm(self.model[1], x) + self.model[0] @ torch.ones((1,len(all_moves)), device=self.device)
             h_tanh = h.tanh()
             y = torch.mm(self.model[3], h_tanh) + self.model[2]
             values = y.sigmoid().detach()
@@ -331,12 +350,15 @@ class SequenceEnv:
 
             # Update board, hand, and attributes
             self.discs_on_board[i,j] = disc
-            new_card = self.draw_card(played_card)
 
-            if self.is_terminal(i, j):
+            self.update_sequences(i, j)
+
+            new_card = self.draw_card(played_card)
+            self.update_attributes((i,j), played_card, new_card)
+
+            if self.is_terminal():
                 return self.player
 
-            self.update_attributes((i,j), played_card, new_card)
         else:
             self.no_feasible_move += 1
             if self.no_feasible_move == 2:
@@ -359,7 +381,9 @@ class SequenceEnv:
             hond = np.zeros(50, dtype=np.uint8)
             np.add.at(hond, self.hand[i], 1)
 
-            attributes.append(np.concatenate((one_hot_board, hond)))
+            sequences = np.zeros(2, dtype=np.int8)
+
+            attributes.append(np.concatenate((one_hot_board, hond, sequences)))
 
         self.attributes = np.array(attributes)
 
@@ -392,6 +416,10 @@ class SequenceEnv:
         if new_card != -1:
             self.attributes[p][288+new_card] += 1
 
+        for k in range(2):
+            self.attributes[k][338] = self.sequences[k]
+            self.attributes[k][339] = self.sequences[1-k]
+
     def learn2(self, policy=('greedy', 'random'), episodes=1000, verbose=True):
         wins = [0, 0]
         if verbose:
@@ -406,7 +434,7 @@ class SequenceEnv:
                 if policy[self.player-1] == 'random':
                     w = self.make_random_move()
                 else:
-                    w = self.make_move(policy)
+                    w = self.make_move()
 
             if w > 0:
                 wins[w-1] += 1
@@ -423,7 +451,6 @@ class SequenceEnv:
         # Implements Lambda Actor-Critic
 
         wins = [0, 0]
-        policy = ('greedy', 'greedy')
         if verbose:
             indices = [(i * episodes) //  20 for i in range(20)]
             print('[', end='')
@@ -438,7 +465,7 @@ class SequenceEnv:
             y_sigmoid = y.sigmoid()
             self.old_value[0] = y_sigmoid
 
-            self.make_move()
+            w = self.make_move()
 
             x = Variable(torch.tensor(np.array([self.attributes[1]]).T, dtype=torch.float, device=self.device))
             h = torch.mm(self.model[1], x) + self.model[0]
@@ -464,15 +491,14 @@ class SequenceEnv:
 
                 w = self.make_move()
 
-            if w == 1:
-                self.learn_step(w - 1, 0, -1)
-                self.learn_step(2 - w, 0, 1)
+            if w > 0:
+                self.learn_step(w - 1, 0, 1)
+                self.learn_step(2 - w, 0, -1)
+                wins[w-1] += 1
             else:
                 self.learn_step(self.player - 1, 0, 0)
                 self.learn_step(2 - self.player, 0, 0)
 
-            if w > 0:
-                wins[w-1] += 1
             if verbose:
                 while len(indices) > 0 and i == indices[0]:
                     print('=', end='')

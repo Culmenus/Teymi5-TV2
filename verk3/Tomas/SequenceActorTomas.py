@@ -221,10 +221,6 @@ class SequenceEnv:
         return attr
 
     def learn_step(self, p, value, reward):
-        # y = torch.mm(self.model[3], h_tanh) + self.model[2] # multiply with the output weights self.model[3] and add bias
-        # y_sigmoid = y.sigmoid() # squash the output
-        # now compute all gradients
-        # y_sigmoid.backward()
         self.old_value[p].backward()
         # update the eligibility traces using the gradients
         self.Z_b1[p] = self.gamma * self.lmbda * self.Z_b1[p] + self.model[0].grad.data
@@ -358,11 +354,10 @@ class SequenceEnv:
             # Update board, hand, and attributes
             self.discs_on_board[i,j] = disc
             new_card = self.draw_card(played_card)
+            self.update_attributes((i,j), played_card, new_card)
 
             if self.is_terminal(i, j):
                 return self.player
-
-            self.update_attributes((i,j), played_card, new_card)
         else:
             self.no_feasible_move += 1
             if self.no_feasible_move == 2:
@@ -538,7 +533,6 @@ class SequenceEnv:
     def set_attributes(self):
         temp_board = np.zeros(96, dtype=np.int8)
 
-        """
         # Heuristic 1
         self.heuristic_1_table = np.zeros((2, 10, 10))
 
@@ -561,9 +555,8 @@ class SequenceEnv:
                 if card < 48:
                     self.heuristic_2_table[i][tuple(self.card_positions[card])] = 1
 
-        """
         attributes = []
-        # hf = np.multiply(self.heuristic_1_table, self.heuristic_2_table)
+        hf = np.multiply(self.heuristic_1_table, self.heuristic_2_table)
         for i in range(2):
             # One hot encoding á borði
             one_hot_board = np.zeros((temp_board.size, 3))
@@ -574,16 +567,16 @@ class SequenceEnv:
             hond = np.zeros(50, dtype=np.uint8)
             np.add.at(hond, self.hand[i], 1)
 
-            # mh1 = np.sum(self.heuristic_1_table[i]) / 100
-            # mh2 = np.sum(np.square(self.heuristic_1_table[i])) / 100
-            # mh3 = np.max(self.heuristic_1_table[i])
-            # mh4 = np.sum(hf[i]) / 100
-            # mh5 = np.sum(np.square(hf[i])) / 100
-            # mh6 = np.max(hf[i])
-            # meta_heuristics = np.array([mh1, mh2, mh3, mh4, mh5, mh6])
+            mh1 = np.sum(self.heuristic_1_table[i]) / 100
+            mh2 = np.sum(np.square(self.heuristic_1_table[i])) / 100
+            mh3 = np.max(self.heuristic_1_table[i])
+            mh4 = np.sum(hf[i]) / 100
+            mh5 = np.sum(np.square(hf[i])) / 100
+            mh6 = np.max(hf[i])
+            meta_heuristics = np.array([mh1, mh2, mh3, mh4, mh5, mh6])
 
-            # attributes.append(np.concatenate((one_hot_board, hond, self.heuristic_1_table[i].flatten(), self.heuristic_2_table[i].flatten(), meta_heuristics, [self.sequences[i]])))
-            attributes.append(np.concatenate((one_hot_board, hond)))
+            attributes.append(np.concatenate((one_hot_board, hond, self.heuristic_1_table[i].flatten(), self.heuristic_2_table[i].flatten(), meta_heuristics, [self.sequences[i]])))
+            # attributes.append(np.concatenate((one_hot_board, hond)))
 
         self.attributes = np.array(attributes)
 
@@ -616,7 +609,6 @@ class SequenceEnv:
         if new_card != -1:
             self.attributes[p][288+new_card] += 1
 
-        """
         # Heuristic 1
         self.update_heuristic_1(pos)
 
@@ -627,7 +619,6 @@ class SequenceEnv:
         hf = np.multiply(self.heuristic_1_table, self.heuristic_2_table)
         t = 338
         for k in range(2):
-            # print(self.heuristic_2_table[k][pos])
             self.attributes[k][t:t+100] = self.heuristic_1_table[k].flatten()
             self.attributes[k][t+100+10*i+j] = self.heuristic_2_table[k][i,j]
 
@@ -641,7 +632,6 @@ class SequenceEnv:
 
             self.attributes[k][t+200:t+206] = meta_heuristics
             self.attributes[k][t+206] = self.sequences[k]
-        """
 
     def play_full_game(self, policy='random', verbose=True):
         if isinstance(policy, str):
@@ -735,15 +725,14 @@ class SequenceEnv:
 
                 w = self.make_move(policy)
 
-            if w == 1:
+            if w > 0:
                 self.learn_step(w - 1, 0, -1)
                 self.learn_step(2 - w, 0, 1)
+                wins[w-1] += 1
             else:
                 self.learn_step(self.player - 1, 0, 0)
                 self.learn_step(2 - self.player, 0, 0)
 
-            if w > 0:
-                wins[w-1] += 1
             if verbose:
                 while len(indices) > 0 and i == indices[0]:
                     print('=', end='')
