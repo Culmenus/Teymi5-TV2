@@ -55,17 +55,17 @@ class leikmadur_teymi_5b:
     self.model[3] = torch.load('../w2_trained.pth')
     self.sequences = [0, 0]
 
-  def update_sequences(self, discs_on_board, i, j):
+  def update_sequences(self, discs_on_board, i, j, player):
     # Updates a set containing the positions of all
     # discs which are part of a sequence, given that
     # the last move was played in position (i, j)
-    if discs_on_board[i,j] != self.player:
+    if discs_on_board[i,j] != player:
       return
-    p = self.player - 1
+    p = player - 1
 
     temp_board = discs_on_board.copy()
     # Crude search; checks if the game is relatively new
-    temp_sum = np.sum(temp_board == self.player)
+    temp_sum = np.sum(temp_board == player)
     if temp_sum < 4:
       self.sequences[p] = 0
       return
@@ -73,11 +73,11 @@ class leikmadur_teymi_5b:
 
     # Horizontal
     t1 = 1
-    while j + t1 < 10 and temp_board[i,j+t1] == self.player:
+    while j + t1 < 10 and temp_board[i,j+t1] == player:
       t1 += 1
     t1 -= 1
     t2 = 1
-    while j - t2 >= 0 and temp_board[i,j-t2] == self.player:
+    while j - t2 >= 0 and temp_board[i,j-t2] == player:
       t2 += 1
     t2 -= 1
     t = t1 + t2
@@ -90,11 +90,11 @@ class leikmadur_teymi_5b:
 
     # Vertical
     t1 = 1
-    while i + t1 < 10 and temp_board[i+t1,j] == self.player:
+    while i + t1 < 10 and temp_board[i+t1,j] == player:
       t1 += 1
     t1 -= 1
     t2 = 1
-    while i - t2 >= 0 and temp_board[i-t2,j] == self.player:
+    while i - t2 >= 0 and temp_board[i-t2,j] == player:
       t2 += 1
     t2 -= 1
     t = t1 + t2
@@ -107,11 +107,11 @@ class leikmadur_teymi_5b:
 
     # Main diagonal
     t1 = 1
-    while i + t1 < 10 and j + t1 < 10 and temp_board[i+t1,j+t1] == self.player:
+    while i + t1 < 10 and j + t1 < 10 and temp_board[i+t1,j+t1] == player:
       t1 += 1
     t1 -= 1
     t2 = 1
-    while i - t2 >= 0 and j - t2 >= 0 and temp_board[i-t2,j-t2] == self.player:
+    while i - t2 >= 0 and j - t2 >= 0 and temp_board[i-t2,j-t2] == player:
         t2 += 1
     t2 -= 1
     t = t1 + t2
@@ -124,11 +124,11 @@ class leikmadur_teymi_5b:
 
     # Antidiagonal
     t1 = 1
-    while i + t1 < 10 and j - t1 >= 0 and temp_board[i+t1,j-t1] == self.player:
+    while i + t1 < 10 and j - t1 >= 0 and temp_board[i+t1,j-t1] == player:
       t1 += 1
     t1 -= 1
     t2 = 1
-    while i - t2 >= 0 and j + t2 < 10 and temp_board[i-t2,j+t2] == self.player:
+    while i - t2 >= 0 and j + t2 < 10 and temp_board[i-t2,j+t2] == player:
       t2 += 1
     t2 -= 1
     t = t1 + t2
@@ -160,7 +160,8 @@ class leikmadur_teymi_5b:
     assert(cards[card] >= 0)
 
     old_sequences = self.sequences.copy()
-    self.update_sequences(discs_on_board, i, j)
+    self.update_sequences(discs_on_board, i, j, 1)
+    self.update_sequences(discs_on_board, i, j, 2)
     seqs = []
     if self.player == 1:
       seqs = np.array([self.sequences[0], self.sequences[1]])
@@ -217,7 +218,8 @@ class leikmadur_teymi_5b:
       else:
         played_card = 49
 
-      self.update_sequences(discs_on_board, i, j)
+      self.update_sequences(discs_on_board, i, j, 0)
+      self.update_sequences(discs_on_board, i, j, 1)
       return (i, j), played_card
     else:
       return (None, None), None
